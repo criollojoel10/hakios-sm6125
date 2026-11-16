@@ -1,0 +1,120 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_MAXSIZE: 3G
+  CCACHE_COMPRESS: "true"
+  CCACHE_COMPILERCHECK: content
+  CCACHE_BASEDIR: ${{ github.workspace }}
+
+jobs:
+  check:
+    name: structure and scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell scripts parse
+        run: git ls-files '*.sh' | xargs -r -n1 bash -n
+
+      - name: Python (if any) compiles
+        run: git ls-files '*.py' | xargs -r python3 -m py_compile
+
+      - name: device.conf and soc.conf are readable by the common tools
+        run: |
+          python3 - <<'PY'
+          import re, pathlib, sys
+          for path, kind in (("device.conf", "device"), ("soc/soc.conf", "soc")):
+              text = pathlib.Path(path).read_text()
+              first = text.splitlines()
+              head = [l for l in first if l.strip() and not l.lstrip().startswith("#")][0].split()
+              assert head[0] == kind and len(head) == 2, (path, head)
+              rows = [l.split(None, 1)[0] for l in first if l.startswith("\t")]
+              assert rows, path
+              print(path, "ok:", head[1], len(rows), "fields")
+          PY
+
+      - name: defconfig includes resolve
+        run: |
+          python3 - <<'PY'
+          import pathlib, sys
+          inc = [l.split(None, 1)[1] for l in pathlib.Path("configs/laurel_sprout_defconfig").read_text().splitlines() if l.startswith("#include")]
+          have = {"common_defconfig"}  # lives in the common repository
+          have |= {p.stem for p in pathlib.Path("soc/configs").glob("*.config")}
+          have |= {p.stem for p in pathlib.Path("configs").glob("*.config")}
+          missing = [i for i in inc if i not in have]
+          print("includes:", inc)
+          assert not missing, f"unresolved: {missing}"
+          PY
+
+  kernel:
+    name: kernel + loader (ccache)
+    needs: check
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Common repository
+        uses: actions/checkout@v4
+        with:
+          repository: oosexgang/hakios-xnu-kernel
+          path: common
+
+      - name: This device
+        uses: actions/checkout@v4
+        with:
+          path: device
+
+      - name: Place the device where the common tree expects it
+        run: |
+          mkdir -p common/devices/laurel_sprout
+          rsync -a --exclude .git device/ common/devices/laurel_sprout/
+
+      - name: ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ccache-sm6125-${{ github.sha }}
+          restore-keys: |
+            ccache-sm6125-
+
+      - name: Toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential ccache cmake ninja-build python3 \
+            libssl-dev lld clang llvm dtc device-tree-compiler libgnutls28-dev uuid-dev \
+            pkg-config libyaml-dev >/dev/null
+          echo "/usr/lib/ccache" >> "$GITHUB_PATH"
+
+      - name: Configure
+        working-directory: common
+        run: make laurel_sprout_defconfig
+
+      - name: Kernel
+        working-directory: common
+        run: make kernel JOBS=$(nproc)
+
+      - name: Loader
+        working-directory: common
+        run: make loader
+
+      - name: ccache stats
+        if: always()
+        run: ccache -s -v | head -n 20
+
+      - name: Collect
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laurel_sprout-kernel-${{ github.sha }}
+          path: |
+            common/logs/**
+            common/.config
+            common/prebuilt/**
+          if-no-files-found: warn
+          retention-days: 14

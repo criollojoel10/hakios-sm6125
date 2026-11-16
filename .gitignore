@@ -1,0 +1,18 @@
+# device firmware, pulled from the phone (tools/pull-firmware.sh)
+fw-*/
+device-tree.dtb
+soc.args
+
+# host tools, not part of the port
+tools/platform-tools-*/
+tools/platform-tools-*/*.zip
+
+# build output
+build/
+out/
+logs/
+*.o
+*.img
+*.fd
+*.bin
+!prebuilt/*.md

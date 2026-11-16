@@ -1,0 +1,12 @@
+# HakiOS defconfig for the Xiaomi Mi A3 (laurel_sprout, SM6125, devices/laurel_sprout): the common
+# kernel's configuration, the SM6125 layer's facts and this phone's own, put together the way Android
+# puts a device's kernel configuration together.
+#
+# Nothing here is verified on the phone yet (see device.conf). The includes are the shape the port has
+# to fill in; `make laurel_sprout_defconfig` is the first gate.
+#
+# Needs the phone's own firmware pulled from the phone (devices/laurel_sprout/pull-firmware.sh):
+# `tools/hakios-config.py needs`.
+#include common_defconfig
+#include sm6125.config
+#include laurel_sprout.config
