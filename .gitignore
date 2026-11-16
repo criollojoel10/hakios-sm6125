@@ -1,7 +1,6 @@
 # device firmware, pulled from the phone (tools/pull-firmware.sh)
 fw-*/
 device-tree.dtb
-soc.args
 
 # host tools, not part of the port
 tools/platform-tools-*/

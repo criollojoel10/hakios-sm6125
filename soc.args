@@ -1,0 +1,10 @@
+soc_ipa_base=0x5840000
+soc_gsi_base=0x5804000
+soc_apps_smmu=0xc600000
+soc_smem=0x46000000
+soc_imem=0xc000000
+soc_ipa_stream=0xe0
+soc_ipa_stream_uc=0xe2
+soc_pas_mpss=0x4
+soc_pas_ipa=0xf
+soc_ipa_fw=ipa_fws

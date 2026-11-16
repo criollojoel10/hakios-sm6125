@@ -33,3 +33,25 @@ Raw dump: `docs/fastboot-all.txt` (211 lines).
 4. **`userdata` is Kupfer's rootfs** (ext4 on `sda15` per the Kupfer manifests), not Android's data.
    Carving `darwin` out of the end of `userdata` (HakiOS's install step) would cut into that filesystem:
    shrink it first, or use a dedicated free region.
+
+## Second pass: Android on adb root (2026-11-16, `ro.build.version.release=17`, sdk 37)
+
+- Android boots from **slot b** (`ro.boot.slot_suffix=_b`) — the same slot the bootloader reported as
+  successful. So the phone's two OSes are swapped by flashing `boot`, not by A/B alone.
+- `adb root` works on this LineageOS build; `/vendor/firmware` is readable as root.
+- `/sys/firmware/fdt` pulled → `device-tree.dtb` (468 601 bytes) → `tools/soc-args.py` → `soc.args`:
+  `soc_ipa_base=0x5840000`, `soc_gsi_base=0x5804000`, `soc_apps_smmu=0xc600000`, `soc_smem=0x46000000`,
+  `soc_imem=0xc000000`, `soc_ipa_stream=0xe0`, `soc_ipa_stream_uc=0xe2`, `soc_pas_mpss=0x4`,
+  `soc_pas_ipa=0xf`, `soc_ipa_fw=ipa_fws`.
+- Firmware inventory pulled and split for `hakios-config.py needs`:
+
+| dir | contents | size |
+|---|---|---|
+| `fw-gpu/` | `a610_zap.{b00,b01,b02,elf,mdt}`, `a630_sqe.fw`, `a630_gmu.bin` | 104 K |
+| `fw-wifi/` | `bdwlan.*`, `wlanmdsp.mbn` (WCN3990) | 4.4 M |
+| `fw-modem/` | `modem.{b*,mdt}` split images | 57 M |
+| `fw-audio/` | `adsp.{b*,mdt}` split images | 16 M |
+
+- Also on disk: the stock fastboot ROM `laurel_sprout_global_images_V12.0.26.0.RFQMIXM_11.0` (Android 11),
+  which holds `NON-HLOS.bin` (112 M, the full modem image) and `dspso.bin` (32 M) — the fallback source if a
+  split image is ever missing.
