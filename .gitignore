@@ -16,3 +16,6 @@ logs/
 *.bin
 !prebuilt/*.md
 .venv/
+
+!prebuilt/fd.conf
+!prebuilt/README.md

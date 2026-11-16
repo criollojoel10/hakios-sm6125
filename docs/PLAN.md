@@ -60,3 +60,25 @@ Record: kernel.ver, driver count printed by `hakios-kernel: N drivers built in (
 1. Does Silicium's laurel platform still boot at today's `BASE`? (Inactive since the port landed.)
 2. Does `a610` come up under XNU with the same zap/firmware pair that works under Linux?
 3. Is 4 GB enough for the RAM-run mode, or is the `darwin`-partition mode mandatory here?
+
+## 2026-11-16 — toolchain and first boot attempt (evidence)
+
+- `xnu-deps/setup.sh` stage 1 + 2 OK with `THEOS=~/theos` (cctools + iPhoneOS16.5.sdk from github.com/theos/sdks);
+  `xnu/apply.sh` applied 82 changed + 72 new files + 49 drivers to `xnu-8796.121.2`.
+- `make kernel` produced `xnu-src/.../BUILD/obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837`
+  (the kext symbol-set checks exit 2 on this configuration, as `tools/make-kernel.sh` says).
+- `make loader` needs an IPSW device tree; `make loader-open` builds a **placeholder** identity (66 048-byte
+  `xnuloader/loader.efi`) — fine for the open kernel, not for Darwin.
+- Mu-Silicium built for this phone: `Build/laurel_sproutPkg/RELEASE_CLANGPDB/FV/SILICIUM_UEFI.fd`
+  (3 145 728 bytes = 0x300000 at base 0x5FC00000, from `Resources/Configs/laurel_sprout.toml`).
+  Needs `mono` + `nasm` on Arch; `stuart_update -c Platforms/Xiaomi/laurel_sproutPkg/DeviceBuild.py` fixes
+  the `mu_nasm` dependency.
+- `mkxnuimg.py` was made device-aware (`-d`, `devices/<device>/prebuilt/fd.conf`, `<device>Pkg`, `<device>.dtb`);
+  `xl`'s firmware probe likewise. Image built: `xnu-laurel_sprout.img` (1 705 984 bytes).
+- **`fastboot boot` is refused by this bootloader** (`FAILED (remote: 'unknown command')`), so the image went to
+  `boot_a` with `set_active a`. After the reboot the phone did not enumerate on USB (neither fastboot nor adb)
+  within a minute: the loader/shim path is not right yet. Recovery is `set_active b`, which restores the
+  Kupfer/Android slot.
+- Next attempt: check the BootShim/FD base contract against `laurel_sprout.toml` (`base = 0x5FC00000`,
+  `size = 0x300000`) and confirm the Android boot header version the bootloader accepts, before writing to
+  `boot_a` again.
