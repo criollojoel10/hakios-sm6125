@@ -82,3 +82,21 @@ Record: kernel.ver, driver count printed by `hakios-kernel: N drivers built in (
 - Next attempt: check the BootShim/FD base contract against `laurel_sprout.toml` (`base = 0x5FC00000`,
   `size = 0x300000`) and confirm the Android boot header version the bootloader accepts, before writing to
   `boot_a` again.
+
+## 2026-11-16 (later) — the boot chain, step by step
+
+1. `fastboot boot` is refused (`unknown command`): the only way to run anything is to write a slot.
+2. Slot a was flagged `unbootable`; `fastboot set_active a` alone does not clear it, `fastboot set_active a`
+   followed by `fastboot reboot-bootloader` does (`slot-unbootable:a: no`).
+3. The working Kupfer image on this phone is **header v0, page 4096, base 0, kernel 0x8000, ramdisk 0x1000000,
+   tags 0x100, kernel = gzip(Image) + DTB appended**. With those exact values the phone got past the bootloader
+   to the Android One logo instead of dropping to fastboot.
+4. Silicium's own recipe (`build_uefi.py` → `Mu-laurel_sprout.img`) is **header v1, page 2048, kernel 0x10008000,
+   kernel = gzip(shim+FD) + DTB**, and it stays at the logo too.
+5. Two suspects, both recorded: `vbmeta_a` was still the vendor one (now replaced with `avbtool make_vbmeta_image
+   --flags 2`, verification disabled), and the gzip stream produced by `gzip.open()` carries a **FNAME header**
+   (`1f 8b 08 08 …`), while the Kupfer image that boots is `1f 8b 08 00`. ABL's decompressor is a plausible
+   place for that difference to matter. An image recompressed with `gzip.compress(..., mtime=0)` (`1f 8b 08 00`)
+   was flashed at 14:30 and the phone stopped falling back to fastboot; whether the screen shows UEFI is the
+   open question.
+6. No serial console on this phone: the screen is the only log until a ramoops entry appears.
