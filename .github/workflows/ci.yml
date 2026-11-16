@@ -45,8 +45,8 @@ jobs:
           import pathlib, sys
           inc = [l.split(None, 1)[1] for l in pathlib.Path("configs/laurel_sprout_defconfig").read_text().splitlines() if l.startswith("#include")]
           have = {"common_defconfig"}  # lives in the common repository
-          have |= {p.stem for p in pathlib.Path("soc/configs").glob("*.config")}
-          have |= {p.stem for p in pathlib.Path("configs").glob("*.config")}
+          have |= {p.name for p in pathlib.Path("soc/configs").glob("*.config")}
+          have |= {p.name for p in pathlib.Path("configs").glob("*.config")}
           missing = [i for i in inc if i not in have]
           print("includes:", inc)
           assert not missing, f"unresolved: {missing}"

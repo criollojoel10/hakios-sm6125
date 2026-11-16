@@ -9,10 +9,13 @@ what to record here.
 - [x] `device.conf`, `soc/soc.conf`, `configs/*`, `soc/configs/sm6125.config`
 - [x] `tools/pull-firmware.sh`, `tools/pull-soc.sh`
 - [x] CI: structure checks on push, kernel+loader with ccache on dispatch
+- [x] `make laurel_sprout_defconfig` succeeds — 2026-11-16, common tree at `63fc2b46`:
+      `.config made from defconfig, common_defconfig, sm6125.config, laurel_sprout.config,
+      laurel_sprout_defconfig`, `kernel.ver=2.3.4-hakios-darwin22.5-sm6125-g63fc2b46`,
+      106 characters of boot-arguments
 - [ ] `tools/hakios-device.py check laurel_sprout` says it holds together (needs the common tree)
-- [ ] `make laurel_sprout_defconfig` succeeds
-
-Evidence goes here: command, date, first line of failure.
+- [ ] firmware pulled: `fw-audio`, `fw-gpu`, `fw-modem`, `fw-wifi` (the four `hakios-config.py needs` asks)
+- [ ] `soc.args` generated with `tools/pull-soc.sh` (needs Android on adb)
 
 ## Phase 1 — the boot chain
 
