@@ -83,13 +83,29 @@ jobs:
           restore-keys: |
             ccache-sm6125-
 
+      - name: theos (cctools + iPhoneOS16.5.sdk), cached
+        uses: actions/cache@v4
+        with:
+          path: ~/theos
+          key: theos-linux-v1
+
+      - name: theos if the cache missed
+        run: |
+          export THEOS="$HOME/theos"
+          if [ ! -x "$THEOS/toolchain/linux/iphone/bin/ld" ]; then
+            bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          fi
+          ls "$THEOS/toolchain/linux/iphone/bin" | head -n 5
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+
       - name: Toolchain
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential ccache cmake ninja-build python3 \
             libssl-dev lld clang llvm dtc device-tree-compiler libgnutls28-dev uuid-dev \
-            pkg-config libyaml-dev >/dev/null
+            pkg-config libyaml-dev flex bison m4 autoconf automake libtool xz-utils >/dev/null
           echo "/usr/lib/ccache" >> "$GITHUB_PATH"
+
 
       - name: Configure
         working-directory: common
