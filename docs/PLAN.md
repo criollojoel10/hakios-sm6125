@@ -100,3 +100,34 @@ Record: kernel.ver, driver count printed by `hakios-kernel: N drivers built in (
    was flashed at 14:30 and the phone stopped falling back to fastboot; whether the screen shows UEFI is the
    open question.
 6. No serial console on this phone: the screen is the only log until a ramoops entry appears.
+
+## Root cause found: the wrong BootShim
+
+`Mu-Silicium/BootShim/BootShim.S` (upstream Silicium) only copies the **FD** to `FD_BASE` and jumps to it:
+
+```asm
+_Start:
+  mov x4, x1 ; ldr x5,=FD_BASE ; cmp x4,x5 ; beq _Entry
+  ldr x6,=FD_SIZE
+_CopyLoop: ldp x2,x3,[x4],#16 ; stp x2,x3,[x5],#16 ; subs x6,x6,#16 ; b.ne _CopyLoop
+_Entry: br x5
+```
+
+It never copies the **XNUP container** that carries the XNU loader, so with an image built from plain Mu-Silicium the
+UEFI (if it starts at all) has no kernel to start and the phone shows the vendor splash and no USB. HakiOS's own
+patched shim does that copy:
+
+> `uefi/apply.sh`: "BootShim.S copies the 'XNUP' container behind the UEFI image to 0xF0000000, where the loader
+> finds the kernel" (`hakios-uefi/hakios.patch`).
+
+So the images built so far (`xnu-laurel_sprout.img`, `boot-laurel.img`, `uefi-nofname.img`, `uefi-v2.img`) were
+built from the **unpatched** tree. The correct chain is:
+
+```sh
+cd hakios-common
+# devices/laurel_sprout/uefi/files/Platforms/Xiaomi/laurel_sproutPkg  (copied from Mu-Silicium)
+./uefi/apply.sh laurel_sprout     # clones Silicium at uefi/BASE, applies hakios.patch, adds the platform
+cd Mu-Silicium && python3 build_uefi.py -d laurel_sprout
+```
+
+then rebuild the boot image with the **hakios** `BootShim.bin` and flash. That is the step in progress.
