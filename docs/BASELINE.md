@@ -78,3 +78,15 @@ reserved-memory: 0x5f800000+0x1e00000, 0x5c000000+0xf00000, 0x5cf00000+0x100000
 
 so the fix is `{"Gap RAM", 0x5D000000, 0x02800000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN}`
 (`xnu-laurel-gap.img`), with `xnu-laurel-gapres.img` as the contrast case.
+
+## Whole-map rebuild from the device tree
+
+`MemoryMapLib.c` for laurel was inherited from the QRD stub and both under- and over-covered memory: the
+`0x5D000000-0x5F800000` hole (DxeCore faulted at `0x5D5E7000`) and `PIL Reserved 0x4AB00000+0x0D200000`
+(which swallowed the free ranges `0x4AB00000+0x500000` and `0x57517000+0x4AE9000`); a later run faulted at
+`0x52FF8F54`, inside a DT carve-out the table did not describe.
+
+The table is now generated from the phone's `/sys/firmware/fdt` `reserved-memory` node: every free range is
+`SYS_MEM`, every carve-out `MEM_RES`, plus the FD/ABOOT/heap/stack entries, so nothing between
+`0x40000000` and `0x7DD00000` is left undescribed. Generator output: `prebuilt/laurel-memory-table.c`
+(37 entries). Image: `hakios-common/xnu-laurel-dtmap.img`.
