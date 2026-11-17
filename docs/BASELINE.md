@@ -90,3 +90,22 @@ The table is now generated from the phone's `/sys/firmware/fdt` `reserved-memory
 `SYS_MEM`, every carve-out `MEM_RES`, plus the FD/ABOOT/heap/stack entries, so nothing between
 `0x40000000` and `0x7DD00000` is left undescribed. Generator output: `prebuilt/laurel-memory-table.c`
 (37 entries). Image: `hakios-common/xnu-laurel-dtmap.img`.
+
+## The FD executes: banner and overlap report on the panel
+
+With `xnu-laurel-gap2.img` the panel finally shows UEFI itself, not a vendor splash:
+
+```
+Silicium UEFI (Mu-Silicium) for Xiaomi Mi A3
+Firmware Version 4.0 Build at 00:08:53 on Nov 17 2026
+RSV 45E00000 (0x45E00000) and AOP CMD DB (0x45F20000) overlap
+RSV 57517000 (0x57517000) and Sched Heap (0x5BC00000) overlap
+```
+
+So SEC/PEI/DXE start and the framebuffer console works; the run stops on two overlaps the map
+generator introduced. Fixed in `prebuilt/laurel-MemoryMapLib.c`:
+
+- `RSV 45E00000` length `0x140000` -> `0x120000` (ends at `AOP CMD DB 0x45F20000`)
+- `DDR 57517000` length `0x04AE9000` -> `0x046A9000` (ends at `Sched Heap 0x5BC00000`)
+
+Checked mechanically: 25 entries, **0 overlaps**. Image: `hakios-common/xnu-laurel-gap3.img`.
