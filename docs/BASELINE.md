@@ -109,3 +109,18 @@ generator introduced. Fixed in `prebuilt/laurel-MemoryMapLib.c`:
 - `DDR 57517000` length `0x04AE9000` -> `0x046A9000` (ends at `Sched Heap 0x5BC00000`)
 
 Checked mechanically: 25 entries, **0 overlaps**. Image: `hakios-common/xnu-laurel-gap3.img`.
+
+## DXE dispatches drivers; the run stops at UFSDxe
+
+`xnu-laurel-gap5.img` (whole MMIO window below 0x40000000 mapped as device) reaches DXE dispatch:
+
+```
+Loading driver at 0x… FvbServicesRuntimeDxe.efi / FvbDxe.efi / FaultTolerantWriteDxe.efi
+Loading driver at 0x… PcdDxe.efi / RuntimeDxe.efi / StatusCodeDxeRuntimeDxe.efi
+Loading driver at 0x… ArpDxe.efi / Dhcp4Dxe.efi / Dhcp6Dxe.efi / DiskIoDxe.efi / PartitionDxe.efi
+Loading driver at 0x… UFSDxe.efi      <- last line before the reboot
+```
+
+UFSDxe is a prebuilt vendor binary (`Binaries/laurel_sprout/QcomPkg/Drivers/UFSDxe/UFSDxe.inf`) listed in the
+port's `APRIORI.inc` and `DXE.inc`. It is not needed to start the loader or XNU (the payload arrives in RAM
+from the boot shim), so both lines are commented out for the next test: `xnu-laurel-noufs.img`.
