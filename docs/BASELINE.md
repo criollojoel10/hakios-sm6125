@@ -55,3 +55,26 @@ Raw dump: `docs/fastboot-all.txt` (211 lines).
 - Also on disk: the stock fastboot ROM `laurel_sprout_global_images_V12.0.26.0.RFQMIXM_11.0` (Android 11),
   which holds `NON-HLOS.bin` (112 M, the full modem image) and `dspso.bin` (32 M) — the fallback source if a
   split image is ever missing.
+
+## 2026-11-16: UEFI runs; DxeCore faulted in a hole the QRD map left unmapped
+
+The DEBUG build prints on the panel (FrameBufferSerialPortLib works). It dies at:
+
+```
+Loading driver at 0x0005D5E7000 EntryPoint=0x0005D5E7EA4 DxeCore.efi
+Data abort: Translation fault, third level   ESR: EC 0x25 IL 0x1 ISS 0x6
+ASSERT [ArmCpuDxe] pExceptionHandlerLib.c(438): (FALSE)
+```
+
+Cause: DXE core decompresses into the largest free block, and laurel's `MemoryMapLib.c` (inherited from the
+QRD stub) left `0x5D000000-0x5F800000` out of the map.
+
+The phone's own device tree, read from `/sys/firmware/fdt` (468 601 B), says that hole is normal RAM:
+
+```
+memory reg = <0x40000000 0x3dd00000  0x00c0000000 0x80000000  0x80000000 0x40000000>
+reserved-memory: 0x5f800000+0x1e00000, 0x5c000000+0xf00000, 0x5cf00000+0x100000
+```
+
+so the fix is `{"Gap RAM", 0x5D000000, 0x02800000, AddMem, SYS_MEM, SYS_MEM_CAP, BsData, WRITE_BACK_XN}`
+(`xnu-laurel-gap.img`), with `xnu-laurel-gapres.img` as the contrast case.
