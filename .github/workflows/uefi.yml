@@ -1,0 +1,115 @@
+name: uefi
+
+# Compila Mu-Silicium (Project Silicium) con los cambios de HakiOS y la plataforma laurel_sprout.
+# Los DXE del vendor vienen del submódulo público Project-Silicium/Device-Binaries (no se copian al
+# repositorio del dispositivo). Es pesado: ~3 GB de submódulos y una hora de edk2, por eso vive aquí.
+#
+# Artefactos: SILICIUM_UEFI.fd, BootShim.bin y los logs del build.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "RELEASE o DEBUG"
+        default: "RELEASE"
+        required: false
+  push:
+    branches: [main]
+    paths:
+      - "uefi/**"
+      - ".github/workflows/uefi.yml"
+
+env:
+  MU: ${{ github.workspace }}/common/Mu-Silicium
+
+jobs:
+  build:
+    name: Mu-Silicium + laurel_sprout
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Common (hakios-xnu-kernel: uefi/apply.sh, BASE, hakios.patch)
+        uses: actions/checkout@v4
+        with:
+          repository: oosexgang/hakios-xnu-kernel
+          path: common
+
+      - name: Este repositorio (laurel_sprout)
+        uses: actions/checkout@v4
+        with:
+          path: device
+
+      - name: Colocar el dispositivo donde el árbol común lo espera
+        run: |
+          mkdir -p common/devices/laurel_sprout
+          rsync -a --exclude .git device/ common/devices/laurel_sprout/
+
+      - name: Dependencias
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential git lld nasm clang llvm \
+            gcc-aarch64-linux-gnu python3 python3-pip python3-venv \
+            uuid-dev acpica-tools device-tree-compiler pkg-config \
+            libssl-dev libgnutls28-dev flex bison m4 autoconf automake libtool \
+            xz-utils rsync >/dev/null
+
+      - name: Mu-Silicium en caché
+        id: mu-cache
+        uses: actions/cache@v4
+        with:
+          path: common/Mu-Silicium
+          key: mu-silicium-${{ hashFiles('common/uefi/BASE') }}-v1
+
+      - name: Árbol Mu-Silicium (BASE + hakios.patch + plataforma laurel)
+        if: steps.mu-cache.outputs.cache-hit != 'true'
+        working-directory: common
+        run: |
+          uefi/apply.sh laurel_sprout 2>&1 | tee /tmp/apply.log
+          ls Mu-Silicium/Platforms/Xiaomi/laurel_sproutPkg | head
+
+      - name: Enlazar la plataforma si la caché ya existía
+        if: steps.mu-cache.outputs.cache-hit == 'true'
+        run: |
+          cp -r common/devices/laurel_sprout/uefi/files/. Mu-Silicium/
+          ls Mu-Silicium/Platforms/Xiaomi/laurel_sproutPkg | head
+
+      - name: Entorno Python de edk2
+        working-directory: common/Mu-Silicium
+        run: |
+          python3 -m venv ../venv
+          ../venv/bin/pip install -q --upgrade pip
+          ../venv/bin/pip install -q -r pip-requirements.txt
+
+      - name: mu_nasm sin Mono (nasm del sistema)
+        run: |
+          D=$MU/Mu_Basecore/BaseTools/Bin/mu_nasm_extdep
+          mkdir -p "$D/Linux-x86-64"
+          echo 'version: 20016.1.1' > "$D/extdep_state.yaml"
+          ln -sf /usr/bin/nasm "$D/Linux-x86-64/nasm"
+          ln -sf /usr/bin/ndisasm "$D/Linux-x86-64/ndisasm"
+          ls -l "$D/Linux-x86-64"
+
+      - name: build_uefi.py
+        working-directory: common/Mu-Silicium
+        run: |
+          source ../venv/bin/activate
+          python3 build_uefi.py -d laurel_sprout -r ${{ github.event.inputs.target || 'RELEASE' }} 2>&1 | tee /tmp/uefi-build.log
+
+      - name: Recoger imágenes
+        if: always()
+        run: |
+          mkdir -p out
+          find "$MU/Build" -name 'SILICIUM_UEFI*.fd' -exec cp -v {} out/ \; || true
+          find "$MU/BootShim" -name '*.bin' -exec cp -v {} out/ \; || true
+          cp /tmp/uefi-build.log out/ 2>/dev/null || true
+          cp /tmp/apply.log out/ 2>/dev/null || true
+          ls -l out
+
+      - name: Artefactos UEFI
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laurel-uefi
+          path: out/
+          if-no-files-found: warn
+          retention-days: 30
