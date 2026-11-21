@@ -71,3 +71,24 @@ built or run yet, because the build needs the vendor DXEs.
   successful bit, so the fallback is re-marked each time.
 - **Not done**: the reboot into slot a. It needs a person watching the panel (there is no console to
   fetch) and a battery over 60 % (55 % at the time of writing).
+
+## 2026-11-21 (later) — boot image rebuilt from CI, test blocked by the phone
+
+The CI artifacts were enough to rebuild the boot image without the vendor tree:
+
+- `laurel-uefi` (run 44920693365): `SILICIUM_UEFI.fd` 3 145 728 B,
+  `BootShim.bin` 112 B.
+- `laurel-build` (run 44919121380): `hakios-kernel` 15 791 328 B,
+  `loader.efi` 66 048 B.
+- `tools/build-image.sh` (UEFI FD + shim + `mkpayload.py` + kernel + loader +
+  `prebuilt/device-tree-android.dtb`) produced `boot-laurel-xnu.img`,
+  **7 245 824 B**, header v0/page 4096, sha256
+  `d4d7a4a714c31489be56e9c99b770365bc64f500cf3936190cbff8b742775a5c`.
+  Same size as the image from the previous session.
+
+The phone went offline (no RNDIS, Tailscale `offline, last seen 3m`) before
+installing `android-tools` and before any write to `boot_a`; no slot was
+modified in this session. The dual-boot test recipe and the GPT recovery are in
+`docs/DUAL-BOOT-TEST.md`. The next session must switch with the **ABL**
+(`fastboot set_active a`) rather than `qbootctl`, and keep the stock
+`gpt_both4.bin` on the host.
