@@ -92,3 +92,42 @@ modified in this session. The dual-boot test recipe and the GPT recovery are in
 `docs/DUAL-BOOT-TEST.md`. The next session must switch with the **ABL**
 (`fastboot set_active a`) rather than `qbootctl`, and keep the stock
 `gpt_both4.bin` on the host.
+
+## 2026-11-21 (night) — first real slot-a boot: Android logo, empty logdump
+
+The phone booted slot a with the CI image and stopped at the **Android logo**: no
+Silicium banner, no `XNULOADER`, and `/dev/disk/by-partlabel/logdump` was empty
+because UEFI never reached its log writer.
+
+Two independent causes, both on the build side:
+
+1. **The CI platform compiled the QRD memory map.** `prebuilt/laurel-MemoryMapLib.c`
+   (the DT-derived table used by `xnu-laurel-gap3.img`, the build that showed the
+   banner) was never copied into
+   `uefi/files/Platforms/Xiaomi/laurel_sproutPkg/Library/MemoryMapLib/`. The UEFI
+   workflow copies `uefi/files/`, so CI shipped the stock table: DxeCore decompresses
+   into the `0x5D000000` hole, faults before the framebuffer console, and the panel
+   stays on the bootloader splash. Fixed in `ef0e5f2`.
+
+2. **`hakios-uefi` was rewritten upstream the same afternoon.** `c5ff339d`
+   (2026-11-21 17:35) replaced Mu-Silicium with a profile-based U-Boot flow and
+   removed `apply.sh`/`BASE`; the workflow failed at `cat common/uefi/BASE` before
+   compiling. laurel is still a Mu-Silicium port, so the workflow now pins
+   **`65621b691b25b94497b0abb5c7e8084ca4976e61`** (the last Mu-Silicium commit,
+   BASE `e51cd877e31c8fbb322032dc4cb6715e83d25ad3`). Migrating laurel to the new
+   U-Boot profiles is separate work.
+
+The next build is **DEBUG** on purpose: RELEASE compiles out the `Loading driver…`
+lines (`MDEPKG_NDEBUG`), and the panel is the only console this phone has.
+
+Hardware note: after the Huasheng hub stopped enumerating (ganged power, killed by
+`uhubctl`), rebinding the host controller brought the whole tree back without
+touching the phone:
+
+```sh
+echo 11200000.usb | sudo tee /sys/bus/platform/drivers/xhci-mtk/unbind
+echo 11200000.usb | sudo tee /sys/bus/platform/drivers/xhci-mtk/bind
+```
+
+`fastboot` stays at **30.0.5** (`/usr/local/bin/fastboot`); `set_active` and
+`reboot` both answered in milliseconds.
