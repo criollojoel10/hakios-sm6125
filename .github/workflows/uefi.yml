@@ -46,7 +46,13 @@ jobs:
 
       - name: Árbol UEFI de HakiOS (hakios-uefi -> common/uefi)
         run: |
-          git clone --depth 1 https://github.com/oosexgang/hakios-uefi.git common/uefi
+          # Pin: upstream replaced Mu-Silicium with a U-Boot flow on 2026-11-21
+          # (c5ff339d). laurel still boots through Mu-Silicium; do not follow it
+          # until the U-Boot profile exists for this phone.
+          git init -q common/uefi
+          git -C common/uefi remote add origin https://github.com/oosexgang/hakios-uefi.git
+          git -C common/uefi fetch -q --depth 1 origin 65621b69
+          git -C common/uefi checkout -q FETCH_HEAD
           ls common/uefi | head -5
           cat common/uefi/BASE
 
