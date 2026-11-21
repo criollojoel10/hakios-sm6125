@@ -44,7 +44,7 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 
 # 1. the XNUP payload the loader finds at 0xF0000000
 python3 "$COMMON/xnuloader/mkpayload.py" -o "$tmp/payload.bin" \
-	kernel="$KERNEL" ramdisk="$LOADER" --cmdline "$CMDLINE" >/dev/null
+	kernel="$KERNEL" ramdisk="$LOADER" --cmdline="$CMDLINE" >/dev/null
 python3 - "$tmp/payload.bin" <<'PY'
 import sys
 d=open(sys.argv[1],'rb').read()
