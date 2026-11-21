@@ -51,7 +51,7 @@ jobs:
           # until the U-Boot profile exists for this phone.
           git init -q common/uefi
           git -C common/uefi remote add origin https://github.com/oosexgang/hakios-uefi.git
-          git -C common/uefi fetch -q --depth 1 origin 65621b69
+          git -C common/uefi fetch -q --depth 1 origin 65621b691b25b94497b0abb5c7e8084ca4976e61
           git -C common/uefi checkout -q FETCH_HEAD
           ls common/uefi | head -5
           cat common/uefi/BASE
