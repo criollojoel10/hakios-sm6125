@@ -54,3 +54,20 @@ built or run yet, because the build needs the vendor DXEs.
   main table — recorded, not repaired (ABL keeps its own layout).
 - `tools/slot.sh`: `status`, `backup`, `to a|b`, `rollback`; `to` refuses unless the backup verifies.
   **Nothing has been written to a boot partition or to the slot metadata.**
+
+### Hardware side: the image is in boot_a and the slot switch works
+
+- **UEFI built on CI twice, byte-identical**: `SILICIUM_UEFI.fd` 3 145 728 B,
+  `sha256 315e263f…f6f748` in runs 44920607280 and 44920693365; `UFSDxe` appears 0 times in the build
+  log (the driver is out of `APRIORI.inc`/`DXE.inc`), `BootShim.bin` 112 B with `FD_BASE=0x5FC00000`,
+  `FD_SIZE=0x300000` in its header.
+- **Boot image built here** from that FD, the shim and the CI kernel+loader:
+  `boot-laurel-noufs.img`, 7 245 824 B, `ANDROID!` v0 / page 4096, gzip member 19 003 408 B
+  decompressing, the 468 601 B device tree appended (`d00dfeed`), `XNUP` at offset 3 145 840.
+- **Written to `boot_a`** and read back identical:
+  `sha256 414120aa…76991`; slot b untouched.
+- **Slot switch verified** with a patched `qbootctl` (see DUAL-BOOT.md): `_a` went Active 1 with `_b`
+  kept Successful 1, then back to `_b` Active 1 Successful 1. `qbootctl -s` clears the target's
+  successful bit, so the fallback is re-marked each time.
+- **Not done**: the reboot into slot a. It needs a person watching the panel (there is no console to
+  fetch) and a battery over 60 % (55 % at the time of writing).

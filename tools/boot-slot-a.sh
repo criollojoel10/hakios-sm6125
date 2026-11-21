@@ -16,7 +16,9 @@ preflight() {
 	local cap
 	cap=$(cat /sys/class/power_supply/*/capacity 2>/dev/null | head -1)
 	[ -n "$cap" ] || die "no battery capacity (do not run this unattended without one)"
-	[ "$cap" -ge 60 ] || die "battery at ${cap}%, needs >= 60% (the UEFI session does not charge)"
+	# a write is a few megabytes and can be done at a moderate charge; a start cannot (the UEFI/loader
+	# session does not charge, and a flat battery in the loader is how a phone goes quiet).
+	[ "$cap" -ge "${MIN_BATTERY:-60}" ] || die "battery at ${cap}%, needs >= ${MIN_BATTERY:-60}% (the UEFI session does not charge)"
 	echo "battery: ${cap}%"
 	[ -f "$BK/SHA256SUMS" ] || die "no backup in $BK"
 	( cd "$BK" && sha256sum -c --quiet SHA256SUMS ) || die "backup does not verify"
@@ -30,7 +32,7 @@ case "${1:-preflight}" in
 preflight) need_root "$@"; preflight ;;
 write)
 	need_root "$@"
-	preflight
+	MIN_BATTERY=20 preflight
 	img=${2:-}; [ -f "$img" ] || die "usage: $0 write IMAGE"
 	size=$(stat -c %s "$img")
 	part=$(blockdev --getsize64 "$BOOT_A")
@@ -44,7 +46,8 @@ print(f'image: ANDROID! v0 page {page}')
 PY
 	dd if="$img" of="$BOOT_A" bs=1M conv=fsync status=none
 	# read back what was written, not what the cache says
-	got=$(dd if="$BOOT_A" bs=1M count=$(( (size + 1048575) / 1048576 )) status=none | head -c "$size" | sha256sum | cut -d' ' -f1)
+	# count_bytes: no `head` closing the pipe under dd (that was a SIGPIPE, not a write error)
+	got=$(dd if="$BOOT_A" bs=1M iflag=count_bytes count="$size" status=none | sha256sum | cut -d' ' -f1)
 	want=$(sha256sum "$img" | cut -d' ' -f1)
 	[ "$got" = "$want" ] || die "read-back mismatch ($got != $want)"
 	echo "boot_a: written $size bytes, read back identical"
@@ -52,7 +55,7 @@ PY
 	;;
 switch)
 	need_root "$@"
-	preflight
+	MIN_BATTERY=60 preflight
 	qbootctl -s a
 	sync
 	echo "slot: ABL will try _a at the next start; _b stays successful, so a failed start falls back"

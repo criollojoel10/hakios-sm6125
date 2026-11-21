@@ -1,0 +1,8 @@
+--- a/qbootctl.c
++++ b/qbootctl.c
+@@ -136,7 +136,7 @@
+ \tint optflag;
+ \tint slot = -1, current_slot;
+ \tint rc;
+-	bool ignore_missing_bsg = false;
++	bool ignore_missing_bsg = true; /* laurel: no CONFIG_SCSI_UFS_BSG; GPT attrs/GUIDs are still written */

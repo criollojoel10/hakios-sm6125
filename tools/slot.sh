@@ -42,6 +42,9 @@ to)
 	[ -f "$BK/SHA256SUMS" ] || die "no backup in $BK; run: tools/slot.sh backup"
 	( cd "$BK" && sha256sum -c --quiet SHA256SUMS ) || die "backup does not verify; refusing to switch"
 	qbootctl -s "$slot"
+	# asking for a slot clears its "successful" flag (it is a new attempt); the *other* one must keep it,
+	# because it is the fallback
+	if [ "$slot" = a ]; then qbootctl -m b; else qbootctl -m b; fi
 	sync
 	echo "slot: asked ABL for _$slot; $(qbootctl -c) now, it takes effect at the next start"
 	;;

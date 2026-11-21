@@ -60,3 +60,57 @@ fastboot reboot
 ```
 
 `fastboot getvar current-slot` tells which one ABL thinks is active.
+
+## 2026-11-21: the switch works from laurel, without UFS BSG
+
+`qbootctl` is the HAL port: it swaps the `_a`/`_b` type GUIDs and the slot attribute bits of the GPT on
+the boot LUN — the same two of the three things ABL's `SetActiveSlot()` changes. On a phone whose both
+slots live on the same LUN (`/dev/sde` here) the third one, the boot LUN number, has nothing to switch.
+
+The distro's binary refuses to write: this kernel has `# CONFIG_SCSI_UFS_BSG is not set`, and
+`qbootctl` opens `/dev/bsg/ufs-bsg0` before writing. Its source has an `ignore_missing_bsg` flag, but
+the binary's `getopt` string does not include `-i`. `tools/qbootctl-ignore-bsg.patch` sets the flag to
+true and the result is installed as `/usr/local/bin/qbootctl` (ahead of `/usr/bin/qbootctl`):
+
+```sh
+gcc -O2 -o qbootctl qbootctl.c bootctrl_impl.c gpt-utils.c crc32.c ufs-bsg.c -I.
+sudo install -m 755 qbootctl /usr/local/bin/qbootctl
+```
+
+Evidence on the phone:
+
+```
+before:  _a Active 0 Successful 0 Bootable 1 | _b Active 1 Successful 1 Bootable 1
+after -s a:  _a Active 1 Successful 0 Bootable 1 | _b Active 0 Successful 1 Bootable 1
+after -s b + -m b:  _a Active 0 Successful 0 Bootable 1 | _b Active 1 Successful 1 Bootable 1
+```
+
+Two things that matter, both seen in those lines:
+
+- asking for a slot clears **that** slot's `successful` bit, so `tools/slot.sh` marks the *other* one
+  successful right after: the fallback must never be the slot that just lost it;
+- `sgdisk -v /dev/sde` reports the LUN 4 backup table CRC as bad, and it did so **before** any write
+  here (the main table is OK). ABL keeps that layout; it is recorded, not repaired.
+
+## Armed, waiting for a person at the phone
+
+The image is already in `boot_a` (written and read back identical):
+
+```
+/var/lib/hakios/images/boot-laurel-noufs.img   7 245 824 B
+sha256 414120aab1ff5e034b386fbc7ae3d064ba088b1a1086fab97298626116776991
+SILICIUM_UEFI.fd sha256 315e263fd16d4fb9418b4322d2fcfc7caa975106ef7093495b1fadd8efc6f748  (same in two CI runs)
+```
+
+To try it, with the phone in hand and the battery over 60% (the UEFI session does not charge):
+
+```sh
+sudo tools/slot.sh to a     # ABL will start slot a; b stays successful
+sudo reboot
+```
+
+What to look for on the panel: `Silicium UEFI (Mu-Silicium) for Xiaomi Mi A3`, then the DXE driver
+list going **past** where it stopped before (no `UFSDxe.efi`), then the loader's `== XNULOADER v3 ==`
+banner. If it stops on the banner or goes black, hold Power ~10 s and power on: ABL retries slot a
+(`successful` is 0, so it is on trial); to stop trying it, hold **Volume Down** at power-on for
+fastboot and use begonia, or let it exhaust its tries and fall back to b.
