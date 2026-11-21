@@ -102,6 +102,16 @@ jobs:
           source ../venv/bin/activate
           python3 build_uefi.py -d laurel_sprout -r ${{ github.event.inputs.target || 'RELEASE' }} 2>&1 | tee /tmp/uefi-build.log
 
+      - name: BootShim (FD base/size de este teléfono)
+        working-directory: common/Mu-Silicium/BootShim
+        run: |
+          BASE=$(sed -n 's/^base=//p' ../../../device/prebuilt/fd.conf)
+          SIZE=$(sed -n 's/^size=//p' ../../../device/prebuilt/fd.conf)
+          echo "FD_BASE=$BASE FD_SIZE=$SIZE"
+          make REQUIRES_KERNEL_HEADER=1 FD_BASE=$BASE FD_SIZE=$SIZE \
+            CFLAGS="--target=aarch64-linux-gnu -DPAYLOAD_BASE=0xF0000000"
+          ls -l BootShim.bin
+
       - name: Recoger imágenes
         if: always()
         run: |
