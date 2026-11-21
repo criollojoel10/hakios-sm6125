@@ -34,3 +34,23 @@ SM6125, kernel `7.2.6-sm61x5`, 8 cores, 3.4 GB RAM, no `/dev/kvm`. The phone is 
 its banner on the panel; DXE dispatches drivers and stops right after `UFSDxe.efi`. The next image
 (`xnu-laurel-noufs.img`) removes the vendor UFS driver from `APRIORI.inc` / `DXE.inc`; it has not been
 built or run yet, because the build needs the vendor DXEs.
+
+### What the two workflows produced (same day)
+
+| Job | Result |
+|---|---|
+| `qemu-open` | **XNU booted in QEMU**: `== XNULOADER v3 ==`, `hello hakios-kernel!`, `Darwin Kernel Version 22.5.0 ... runner:xnu-8796.121.2`, `hakios-kernel: 25 drivers built in (...)`, `hakios-kernel: version 2.3.4-hakios-darwin22.5-g63fc2b46`, `Hello from user space on Darwin!`, then the expected `panic: initproc failed to start` after `hello` exits. Log kept as artifact `qemu-open-logs` (32 KB). |
+| `build-laurel` | kernel for laurel_sprout built and uploaded: `hakios-kernel` 15.7 MB, `loader.efi` 66 048 B; `logs/config.txt` shows `CONFIG_DEVICE="laurel_sprout"`, `CONFIG_SOC="sm6125"`, `CONFIG_CPUS=8`. `kernel.ver` was not written by this path yet. |
+| `uefi` | failed: the common checkout has no `uefi/`, which comes from `hakios-uefi`; the workflow now clones it first. Not re-run yet. |
+
+### Slot and backups (read-only so far)
+
+- `qbootctl` reads what ABL reports: `_a` active 0 / successful 0 / bootable 1, `_b` active 1 /
+  successful 1 / bootable 1; current `_b`.
+- `misc` holds a leftover AOSP BCB `bootonce-bootloader`; the slot state qbootctl reads lives in the boot
+  LUN's (`/dev/sde`) partition attributes.
+- Backup at `/var/lib/hakios/backups/2026-11-21/`: boot_a, boot_b, dtbo_a/b, vbmeta_a/b, misc, devinfo,
+  `gpt.bin` and a verified SHA256SUMS (178 MB). `sgdisk` warns the LUN 4 backup header disagrees with the
+  main table — recorded, not repaired (ABL keeps its own layout).
+- `tools/slot.sh`: `status`, `backup`, `to a|b`, `rollback`; `to` refuses unless the backup verifies.
+  **Nothing has been written to a boot partition or to the slot metadata.**

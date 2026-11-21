@@ -44,6 +44,12 @@ jobs:
           mkdir -p common/devices/laurel_sprout
           rsync -a --exclude .git device/ common/devices/laurel_sprout/
 
+      - name: Árbol UEFI de HakiOS (hakios-uefi -> common/uefi)
+        run: |
+          git clone --depth 1 https://github.com/oosexgang/hakios-uefi.git common/uefi
+          ls common/uefi | head -5
+          cat common/uefi/BASE
+
       - name: Dependencias
         run: |
           sudo apt-get update -qq
@@ -64,6 +70,7 @@ jobs:
         if: steps.mu-cache.outputs.cache-hit != 'true'
         working-directory: common
         run: |
+          set -o pipefail
           uefi/apply.sh laurel_sprout 2>&1 | tee /tmp/apply.log
           ls Mu-Silicium/Platforms/Xiaomi/laurel_sproutPkg | head
 
