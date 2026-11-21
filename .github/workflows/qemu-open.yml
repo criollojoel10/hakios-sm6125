@@ -1,0 +1,104 @@
+name: qemu-open
+
+# Arranca el kernel XNU de HakiOS (configuración abierta, sin nada de Apple) en QEMU sobre un runner
+# x86_64 de GitHub. Sirve para capturar el log de arranque de XNU sin tocar el teléfono: el teléfono
+# (laurel) no puede hacerse fastboot a sí mismo y se queda sin RAM para compilar XNU.
+#
+# Resultado: artefacto "qemu-open-logs" con logs/qemu-open.log y el payload usado.
+
+on:
+  workflow_dispatch:
+    inputs:
+      secs:
+        description: "Segundos de sesión QEMU"
+        default: "120"
+        required: false
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/qemu-open.yml"
+
+env:
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_MAXSIZE: 3G
+  CCACHE_COMPRESS: "true"
+  CCACHE_COMPILERCHECK: content
+  CCACHE_BASEDIR: ${{ github.workspace }}
+  THEOS: ${{ github.workspace }}/theos
+
+jobs:
+  qemu:
+    name: kernel + loader + QEMU
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Common (hakios-xnu-kernel)
+        uses: actions/checkout@v4
+        with:
+          repository: oosexgang/hakios-xnu-kernel
+          path: common
+
+      - name: Este repositorio (laurel_sprout)
+        uses: actions/checkout@v4
+        with:
+          path: device
+
+      - name: Colocar el dispositivo donde el árbol común lo espera
+        run: |
+          mkdir -p common/devices/laurel_sprout
+          rsync -a --exclude .git device/ common/devices/laurel_sprout/
+
+      - name: ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-qemu-open-${{ github.sha }}
+          restore-keys: |
+            ccache-qemu-open-
+            ccache-sm6125-
+
+      - name: theos (cctools + iPhoneOS16.5.sdk)
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.THEOS }}
+          key: theos-linux-v1
+
+      - name: theos si la caché falló
+        run: |
+          if [ ! -x "$THEOS/toolchain/linux/iphone/bin/ld" ]; then
+            bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          fi
+          ls "$THEOS/toolchain/linux/iphone/bin" | head -n 5
+
+      - name: Dependencias
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential ccache cmake ninja-build python3 python3-yaml \
+            libssl-dev lld clang llvm device-tree-compiler libgnutls28-dev uuid-dev pkg-config \
+            libyaml-dev flex bison m4 autoconf automake libtool xz-utils rsync \
+            qemu-system-arm qemu-efi-aarch64 >/dev/null
+          echo "/usr/lib/ccache" >> "$GITHUB_PATH"
+
+      - name: Mostrar firmware UEFI disponible
+        run: ls -l /usr/share/qemu-efi-aarch64/ /usr/share/AAVMF/ 2>/dev/null || true
+
+      - name: Build + sesión QEMU
+        working-directory: common
+        run: |
+          mkdir -p logs
+          make qemu-open SECS=${{ github.event.inputs.secs || '120' }} 2>&1 | tee logs/qemu-open-console.log
+        env:
+          QEMU_MEM: 4G
+          QEMU_TB_MB: 512
+          JOBS: 4
+
+      - name: Artefactos (logs del arranque de XNU)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-open-logs
+          path: |
+            common/logs/
+            common/qemu/payload.bin
+          if-no-files-found: warn
+          retention-days: 30

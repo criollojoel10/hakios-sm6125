@@ -1,0 +1,123 @@
+name: build-laurel
+
+# Build pesado del kernel XNU para laurel_sprout (SM6125) + el loader, en un runner de GitHub.
+# En laurel (3.4 GB RAM, sin compiladores hasta hoy) esto tarda horas y puede quedarse sin memoria;
+# aquí produce artefactos descargables: hakios-kernel, loader.efi, .config, kernel.ver y logs.
+#
+# No escribe nada en el teléfono ni necesita firmware del vendor.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "configs/**"
+      - "soc/**"
+      - "drivers/**"
+      - ".github/workflows/build-laurel.yml"
+
+env:
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_MAXSIZE: 4G
+  CCACHE_COMPRESS: "true"
+  CCACHE_COMPILERCHECK: content
+  CCACHE_BASEDIR: ${{ github.workspace }}
+  THEOS: ${{ github.workspace }}/theos
+
+jobs:
+  build:
+    name: defconfig + kernel + loader
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Common (hakios-xnu-kernel)
+        uses: actions/checkout@v4
+        with:
+          repository: oosexgang/hakios-xnu-kernel
+          path: common
+
+      - name: Este repositorio (laurel_sprout)
+        uses: actions/checkout@v4
+        with:
+          path: device
+
+      - name: Colocar el dispositivo donde el árbol común lo espera
+        run: |
+          mkdir -p common/devices/laurel_sprout
+          rsync -a --exclude .git device/ common/devices/laurel_sprout/
+
+      - name: ccache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ccache-laurel-${{ github.sha }}
+          restore-keys: |
+            ccache-laurel-
+            ccache-sm6125-
+
+      - name: theos (cctools + iPhoneOS16.5.sdk)
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.THEOS }}
+          key: theos-linux-v1
+
+      - name: theos si la caché falló
+        run: |
+          if [ ! -x "$THEOS/toolchain/linux/iphone/bin/ld" ]; then
+            bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          fi
+          ls "$THEOS/toolchain/linux/iphone/bin" | head -n 5
+
+      - name: Dependencias
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential ccache cmake ninja-build python3 python3-yaml \
+            libssl-dev lld clang llvm device-tree-compiler libgnutls28-dev uuid-dev pkg-config \
+            libyaml-dev flex bison m4 autoconf automake libtool xz-utils rsync >/dev/null
+          echo "/usr/lib/ccache" >> "$GITHUB_PATH"
+
+      - name: defconfig
+        working-directory: common
+        run: make laurel_sprout_defconfig 2>&1 | tee logs-defconfig.txt
+
+      - name: Qué configuración es
+        working-directory: common
+        run: |
+          mkdir -p logs
+          make config 2>&1 | tee logs/config.txt
+          cp logs-defconfig.txt logs/ || true
+          cat kernel.ver 2>/dev/null | tee logs/kernel.ver || true
+
+      - name: Kernel
+        working-directory: common
+        run: make kernel JOBS=4 2>&1 | tee logs/kernel-build.log
+
+      - name: Loader
+        working-directory: common
+        run: make loader-open 2>&1 | tee logs/loader-build.log
+
+      - name: Resumen
+        if: always()
+        working-directory: common
+        run: |
+          {
+            echo "kernel.ver: $(cat kernel.ver 2>/dev/null || echo 'no generado')"
+            echo "kernel: $(ls -l hakios-kernel 2>/dev/null || echo 'no generado')"
+            echo "loader: $(ls -l xnuloader/loader.efi 2>/dev/null || echo 'no generado')"
+            echo "--- últimas líneas del build ---"
+            tail -30 logs/kernel-build.log 2>/dev/null || true
+          } | tee logs/summary.txt
+
+      - name: Artefactos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: laurel-build
+          path: |
+            common/logs/
+            common/hakios-kernel
+            common/kernel.ver
+            common/.config
+            common/xnuloader/loader.efi
+          if-no-files-found: warn
+          retention-days: 30
