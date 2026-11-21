@@ -64,7 +64,13 @@ jobs:
       - name: theos si la caché falló
         run: |
           if [ ! -x "$THEOS/toolchain/linux/iphone/bin/ld" ]; then
-            bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+            # Ubuntu 26.04 dropped the "libxml2" package name; install what it provides and take the
+            # dependency line out of the installer instead of letting it fail there.
+            sudo apt-get install -y -qq build-essential fakeroot rsync curl perl zip git \
+              libxml2-dev libtinfo6 libz3-dev
+            curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos -o /tmp/install-theos
+            sed -i 's/git libxml2 \\/git \\/' /tmp/install-theos
+            bash /tmp/install-theos
           fi
           ls "$THEOS/toolchain/linux/iphone/bin" | head -n 5
 

@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:
-      - name: Common (hakios-xnu-kernel: uefi/apply.sh, BASE, hakios.patch)
+      - name: "Common (hakios-xnu-kernel: uefi/apply.sh, BASE, hakios.patch)"
         uses: actions/checkout@v4
         with:
           repository: oosexgang/hakios-xnu-kernel
