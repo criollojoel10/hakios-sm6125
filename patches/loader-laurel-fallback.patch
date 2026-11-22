@@ -1,18 +1,63 @@
 diff --git a/xnuloader/loader.c b/xnuloader/loader.c
-index 422f9d3..8165427 100644
+index 422f9d3..b365901 100644
 --- a/xnuloader/loader.c
 +++ b/xnuloader/loader.c
-@@ -588,16 +588,24 @@ static const struct platform platform_redwood = {
+@@ -559,6 +559,7 @@ struct platform {
+ 	int log_other_cpu;               /* keep notes in the log partition while a kernel starts on another core */
+ 	int cores;                       /* at most this many processor cores, numbered from 0 ... */
+ 	int core_shift;                  /* ... in this bit of MPIDR: the phone numbers them in the second affinity field */
++	const uint32_t *core_mpidr;      /* ... or this table, when the numbering has a gap (SM6125: 0-3, 0x100-0x103) */
+ 	uint32_t timeout_scale;          /* a kernel on several cores gets this much longer to wait for a lock, 0: as it is */
+ 	uint32_t small_cores;            /* a bit for each of the slower cores, by number: "small-core" in the device tree */
+ };
+@@ -588,16 +589,61 @@ static const struct platform platform_redwood = {
  	.small_cores = 0x0f,
  };
  
++/*
++ * SM6125 (ginkgo and laurel): four Cortex-A53 cores numbered 0x0-0x3 and four
++ * Cortex-A73 cores numbered 0x100-0x103. No single shift turns the kernel's
++ * 0-7 core index into both ranges, so the platform carries the MPIDRs.
++ */
++static const uint32_t sm6125_core_mpidr[8] = {
++	0x000, 0x001, 0x002, 0x003, 0x100, 0x101, 0x102, 0x103,
++};
++
 +static const struct platform platform_laurel = {
 +	/* laurel_sprout: same SM6125 facts as ginkgo; SMC PSCI, GIC 0x0f200000/0x0f300000 */
 +	.name = "laurel", .io_base = 0x00400000, .io_size = 0x3FC00000,
 +	.gic_dist = 0x0F200000, .gic_redist = 0x0F300000, .uart = 0,
 +	.psci_hvc = 0, .log_other_cpu = 1,
-+	.cores = 8, .core_shift = 8, .small_cores = 0x0f,
++	.cores = 8, .core_shift = 8, .core_mpidr = sm6125_core_mpidr, .small_cores = 0x0f,
 +};
++
++/* the MPIDR of core N: the platform's table when it has one, else N shifted into Affinity1 */
++static uint64_t
++plat_core_mpidr(const struct platform *plat, int core)
++{
++	if (core < 0 || core >= plat->cores) {
++		return UINT64_MAX;
++	}
++	if (plat->core_mpidr != NULL) {
++		return plat->core_mpidr[core];
++	}
++	return (uint64_t)core << plat->core_shift;
++}
++
++/* the number of that MPIDR in the platform's 0..cores-1 numbering, -1 if it is not one of its cores */
++static int
++plat_mpidr_core(const struct platform *plat, uint64_t mpidr)
++{
++	if (plat->core_mpidr != NULL) {
++		for (int core = 0; core < plat->cores; core++) {
++			if (plat->core_mpidr[core] == (uint32_t)mpidr) {
++				return core;
++			}
++		}
++		return -1;
++	}
++	return (int)(mpidr >> plat->core_shift);
++}
 +
  /* ------------------------------------------------------------------------ */
  
@@ -30,7 +75,7 @@ index 422f9d3..8165427 100644
  }
  
  /*
-@@ -2503,7 +2511,7 @@ wdt_arm(void)
+@@ -2503,7 +2549,7 @@ wdt_arm(void)
  {
  	uint64_t ctl = 0, since = 0;
  
@@ -39,7 +84,7 @@ index 422f9d3..8165427 100644
  		return; /* SMC is not routed anywhere useful on QEMU virt */
  	}
  	uint64_t st = smc_call(VIRT_WDT_STATUS, 0, 0, &ctl, &since);
-@@ -2515,6 +2523,25 @@ wdt_arm(void)
+@@ -2515,6 +2561,25 @@ wdt_arm(void)
  	wdt_armed = (r_pet == 0);
  }
  
@@ -65,7 +110,7 @@ index 422f9d3..8165427 100644
  /* ------------------------------------------------------------------------ */
  /* UEFI exception hook: put the fault into the log instead of on the screen  */
  
-@@ -2528,9 +2555,7 @@ exception_handler(int64_t type, uint64_t *ctx)
+@@ -2528,9 +2593,7 @@ exception_handler(int64_t type, uint64_t *ctx)
  	print("loader image base %x (elr offset %x)\n", (uint64_t)(uintptr_t)&__ImageBase,
  	    ctx[EXC_CTX_ELR] - (uint64_t)(uintptr_t)&__ImageBase);
  	flush_log();
@@ -76,7 +121,42 @@ index 422f9d3..8165427 100644
  }
  
  static void
-@@ -4350,6 +4375,12 @@ efi_main(efi_handle image, efi_system_table *st)
+@@ -3014,7 +3077,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
+ 	block_enabled = 0;
+ 	for (const char *c = pi.cmdline; *c; c++) {
+ 		if (starts_with(c, "bootcpu=") && (c == pi.cmdline || c[-1] == ' ') && c[8] >= '0' && c[8] <= '7') {
+-			kernel_mpidr = (uint64_t)(c[8] - '0') << PLAT->core_shift;
++			kernel_mpidr = plat_core_mpidr(PLAT, c[8] - '0');
+ 		}
+ 		more_cores |= (starts_with(c, "cpus=") || starts_with(c, "cpumask=")) && (c == pi.cmdline || c[-1] == ' ');
+ 		battery_requested |= starts_with(c, "battery=1") && (c == pi.cmdline || c[-1] == ' ') &&
+@@ -3361,13 +3424,13 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
+ 	 * this loader stays on while it watches is not the kernel's, nor any the firmware runs.
+ 	 */
+ 	uint64_t cpu_mpidr[8] = { kernel_mpidr };
+-	int cpu_count = 1, boot_core = (int)(kernel_mpidr >> plat->core_shift);
++	int cpu_count = 1, boot_core = plat_mpidr_core(plat, kernel_mpidr);
+ 
+ 	if (more_cores) {
+ 		for (int distance = 1; distance < plat->cores; distance++) {
+ 			for (int side = 0; side < 2; side++) {
+ 				int core = side == 0 ? boot_core + distance : boot_core - distance;
+-				uint64_t mpidr = (uint64_t)core << plat->core_shift;
++				uint64_t mpidr = plat_core_mpidr(plat, core);
+ 				int64_t state;
+ 
+ 				if (core < 0 || core >= plat->cores || mpidr == this_mpidr) {
+@@ -3403,7 +3466,8 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
+ 		dt_prop_u64(&w, "bus-frequency", 100000000ULL);
+ 		dt_prop_u64(&w, "memory-frequency", 100000000ULL);
+ 		dt_prop_u64(&w, "peripheral-frequency", 24000000ULL);
+-		if (plat->small_cores & (1u << ((cpu_mpidr[i] >> plat->core_shift) & 31))) {
++		int core = plat_mpidr_core(plat, cpu_mpidr[i]);
++		if (core >= 0 && (plat->small_cores & (1u << (core & 31)))) {
+ 			dt_prop_u32(&w, "small-core", 1);
+ 		}
+ 		dt_end(&w);
+@@ -4350,6 +4414,12 @@ efi_main(efi_handle image, efi_system_table *st)
  		}
  		print("display %d x %d at %x\n", (uint64_t)SCREEN.width, (uint64_t)SCREEN.height, SCREEN.base);
  	}

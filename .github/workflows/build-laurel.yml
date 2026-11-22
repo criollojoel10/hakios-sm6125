@@ -64,6 +64,18 @@ jobs:
           sed -i 's|^+#define __ARM_PAN_AVAILABLE__.*|+/* SM6125 has no PAN (ARMv8.0-A; ginkgo: CONFIG_XNU_NATIVE_PAN=n) */|' xnu/hakios.patch
           grep -n -E 'PAN|MACHINE_FLAGS_ARM64_BCM2837' xnu/hakios.patch | head
 
+      - name: Parches XNU de ginkgo/SM6125 (phandle y modload)
+        working-directory: common
+        run: |
+          # UniXNU-sm6125-common @ 02c2de60, the port for the same SM6125:
+          # - iokit-fdt-phandle-alias: IODeviceTree accepts the FDT phandle spellings.
+          # - sm6125-modload-lock-order: the kext lock around OSKext::load (OSMetaClass).
+          # Neither file is touched by hakios.patch, so the hunks apply on top of it.
+          cat "$GITHUB_WORKSPACE/device/patches/xnu-iokit-fdt-phandle-alias.patch" \
+              "$GITHUB_WORKSPACE/device/patches/xnu-sm6125-modload-lock-order.patch" >> xnu/hakios.patch
+          grep -c '^diff --git' xnu/hakios.patch
+          grep -n 'OSKextLockForModLoad\|gIODTPHandleKey' xnu/hakios.patch | head
+
       - name: ccache
         uses: actions/cache@v4
         with:
