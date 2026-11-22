@@ -309,6 +309,21 @@ PstoreMarker ()
   for (i = 0; i < RAMOOPS_RECORD; i += 64) {
     __asm__ volatile ("dc cvac, %0" :: "r" (Zone + i));
   }
+
+  /* The console zone starts after the 96 dmesg records: raw text, same header. */
+  {
+    UINT8 *Con = (UINT8 *)(UINTN)(RAMOOPS_PA + 96ULL * RAMOOPS_RECORD);
+    static const char Text[] = "stage0 console marker: ramoops write works\n";
+
+    ZeroMem (Con, RAMOOPS_RECORD);
+    *(UINT32 *)(Con + 0) = RAMOOPS_SIG;
+    *(UINT32 *)(Con + 4) = 0;
+    CopyMem (Con + 12, Text, sizeof (Text) - 1);
+    *(UINT32 *)(Con + 8) = (UINT32)(sizeof (Text) - 1);
+    for (i = 0; i < RAMOOPS_RECORD; i += 64) {
+      __asm__ volatile ("dc cvac, %0" :: "r" (Con + i));
+    }
+  }
   __asm__ volatile ("dsb sy" ::: "memory");
 }
 
