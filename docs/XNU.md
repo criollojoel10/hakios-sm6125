@@ -162,3 +162,26 @@ snapshot; read them first. In short:
 
 So the current gate is no longer "does the payload base match" but "does the XNU kernel
 produce a line of output that survives the fallback".
+
+## 10. 2026-11-22: no PAN, and the kernel timer fired
+
+- `ca2d623` builds the kernel without PAN. `build-nopan/logs/kernel-build.log`
+  has **0** occurrences of `-Xclang -target-feature -Xclang +pan`.
+- Image `boot-laurel-xnu-nopan.img`, 7 729 152 B,
+  `b4692ca6a1ccc4775801465949bdb72602b21e22e76a35bfe0347b13b1da47be`:
+  kernel `778745983fbcf4d7…`, patched loader `a3ab487cee6f8005…`, cmdline
+  `-v hv_wdt_pet=1 loader_return_after=20`.
+- `fastboot set_active a` cleared the previous Bootable 0. After the boot the
+  phone returned to Linux **by itself after 244 s**; `qbootctl` then showed
+  slot a Active 0, Successful 0, **Bootable 0**, and b Active 1, Successful 1,
+  Bootable 1. `last-boot.txt` is stamped 04:31.
+- 244 s is the seven ABL retries of roughly UEFI plus 20 s. The
+  `loader_return_after` timer is a kernel `thread_call`; it fired on each boot,
+  so the XNU kernel started. The earlier "no evidence the kernel executed" is
+  superseded. The kernel log is printed on the panel by the loader after the
+  return; `logdump` is still zero because UFS BlockIO is unavailable.
+- The fallback itself is the loader `platform_laurel` + watchdog patch
+  (`51b938f`); the higha map and the no-PAN kernel are now in CI. The next gate
+  is a **persisted** kernel log, not the loader screen. The local
+  0x70000000 payload-base experiment remains for the local tree; the CI HakiOS
+  shim at 0xF0000000 reaches the kernel timer.

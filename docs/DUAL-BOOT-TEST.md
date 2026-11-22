@@ -144,3 +144,13 @@ persistence still needs the native UFS write or the kernel UFS driver.
 
 To test XNU again after a fallback, `fastboot set_active a` (it clears
 `Bootable 0` and resets the retry count). Without that, ABL keeps booting b.
+
+### 2026-11-22: no-PAN kernel and fallback
+
+`boot-laurel-xnu-nopan.img` (`b4692ca6…`, kernel `77874598…`, loader
+`a3ab487c…`, cmdline `-v hv_wdt_pet=1 loader_return_after=20`) was flashed to
+boot_a after `set_active a`. It returned to Linux by itself after 244 s;
+`qbootctl` left slot a **Bootable 0** and b active/successful. The build log has
+zero `+pan` occurrences (SM6125 is ARMv8.0-A). The 20 s `loader_return_after`
+timer is a kernel thread call, so the XNU kernel started; `logdump` remains
+zero because UFS BlockIO is still unavailable.

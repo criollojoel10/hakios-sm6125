@@ -173,3 +173,14 @@ on reboot/exception. CI `build-laurel` applies it (artifact loader
 themselves; `qbootctl` left slot a **Bootable 0** and slot b active/successful.
 That is the automatic fallback the port needed. `logdump` remains zero until
 UFS BlockIo works; the kernel log is only on the panel for now.
+
+## 2026-11-22 (later) — no PAN, kernel timer, fallback repeated
+
+The kernel was built without `+pan` (`ca2d623`; 0 occurrences in the build log)
+and the image `boot-laurel-xnu-nopan.img` (kernel `77874598…`, loader
+`a3ab487c…`, `-v hv_wdt_pet=1 loader_return_after=20`) returned to Linux after
+244 s on its own. Seven ABL retries of UEFI plus 20 s: the kernel's
+`loader_return_after` thread call fired, so XNU started; the kernel log is on
+the panel, `logdump` still zero. `qbootctl`: a Bootable 0, b active/successful.
+The cachy handoff `docs/XNU.md` was pulled from origin (commits `445145d`,
+`12dfdd4`) and extended with section 10.
