@@ -1,8 +1,43 @@
 diff --git a/xnuloader/loader.c b/xnuloader/loader.c
-index 422f9d3..b365901 100644
+index 422f9d3..ee63b3b 100644
 --- a/xnuloader/loader.c
 +++ b/xnuloader/loader.c
-@@ -559,6 +559,7 @@ struct platform {
+@@ -339,6 +339,20 @@ compose_logs(const char *klog, uint64_t klog_len)
+ 	staged_len = n;
+ }
+ 
++/*
++ * laurel reserves a ramoops region (768 KiB at 0xffc40000: 96 x 4 KiB dmesg
++ * records, then 256 KiB console and 128 KiB pmsg, ecc 0) and the Linux kernel
++ * registers pstore on it at boot. Leave the log there before a reset: pstore
++ * exposes each record as /sys/fs/pstore/dmesg-ramoops-N, so the XNU log is
++ * readable from Linux without UFS BlockIo or /dev/mem.
++ */
++#define RAMOOPS_PA      0xFFC40000ULL
++#define RAMOOPS_RECORD  4096
++#define RAMOOPS_ZONES   96
++#define RAMOOPS_SIG     0x43474244u
++static int ram_log_has_kernel;          /* this run's kernel log was kept: a later flush must not replace it */
++static void persist_log_ram(const char *data, uint64_t len);
++
+ static int hc_list_is_uefis(void);
+ static int hc_log_skips;                /* logs not written this run (said twice at most) */
+ static void hc_print_state(const char *when);
+@@ -350,6 +364,13 @@ write_logs(const char *klog, uint64_t klog_len)
+ 	efi_block_io *bio = find_log_partition();
+ 
+ 	compose_logs(klog, klog_len);
++	/* The kernel log is the one worth keeping; a later loader-only flush must not replace it. */
++	if (klog != NULL) {
++		ram_log_has_kernel = 1;
++	}
++	if (klog != NULL || !ram_log_has_kernel) {
++		persist_log_ram(klog != NULL ? klog : out_buf, klog != NULL ? klog_len : staged_len);
++	}
+ 	if (bio == NULL) {
+ 		/* No log partition (QEMU): echo the returned kernel log on the console instead. */
+ 		if (klog != NULL) {
+@@ -559,6 +580,7 @@ struct platform {
  	int log_other_cpu;               /* keep notes in the log partition while a kernel starts on another core */
  	int cores;                       /* at most this many processor cores, numbered from 0 ... */
  	int core_shift;                  /* ... in this bit of MPIDR: the phone numbers them in the second affinity field */
@@ -10,7 +45,7 @@ index 422f9d3..b365901 100644
  	uint32_t timeout_scale;          /* a kernel on several cores gets this much longer to wait for a lock, 0: as it is */
  	uint32_t small_cores;            /* a bit for each of the slower cores, by number: "small-core" in the device tree */
  };
-@@ -588,16 +589,61 @@ static const struct platform platform_redwood = {
+@@ -588,16 +610,61 @@ static const struct platform platform_redwood = {
  	.small_cores = 0x0f,
  };
  
@@ -75,7 +110,46 @@ index 422f9d3..b365901 100644
  }
  
  /*
-@@ -2503,7 +2549,7 @@ wdt_arm(void)
+@@ -889,6 +956,38 @@ static const struct platform *PLAT;
+ static void clean_dcache(uint64_t start, uint64_t end);
+ static void flush_dcache(uint64_t start, uint64_t end);
+ 
++/* The pstore/ramoops handoff: laurel only, where the region and its 4 KiB records are known. */
++static void
++persist_log_ram(const char *data, uint64_t len)
++{
++	static const char hdr[] = "====0.000000-D\n";   /* pstore dmesg record header, uncompressed */
++	uint8_t *base = (uint8_t *)(uintptr_t)RAMOOPS_PA;
++	uint64_t off = 0;
++	int zone = 0;
++
++	if (PLAT != &platform_laurel || data == NULL || len == 0) {
++		return;
++	}
++	memset(base, 0, (uint64_t)RAMOOPS_ZONES * RAMOOPS_RECORD);
++	while (off < len && zone < RAMOOPS_ZONES) {
++		uint64_t cap = RAMOOPS_RECORD - 12 - (sizeof(hdr) - 1);
++		uint64_t take = len - off;
++		uint8_t *z = base + (uint64_t)zone * RAMOOPS_RECORD;
++
++		if (take > cap) {
++			take = cap;
++		}
++		*(uint32_t *)(z + 0) = RAMOOPS_SIG;
++		*(uint32_t *)(z + 4) = 0;               /* start */
++		memcpy(z + 12, hdr, sizeof(hdr) - 1);
++		memcpy(z + 12 + (sizeof(hdr) - 1), data + off, take);
++		*(uint32_t *)(z + 8) = (uint32_t)((sizeof(hdr) - 1) + take);        /* data bytes, not the 12-byte header */
++		off += take;
++		zone++;
++	}
++	clean_dcache((uint64_t)(uintptr_t)base, (uint64_t)(uintptr_t)base + (uint64_t)zone * RAMOOPS_RECORD);
++}
++
+ /* What the kernel shows a watching loader (struct loader_live in XNU's loader_return.c). */
+ struct kernel_live {
+ 	uint64_t magic;                 /* "XNULIVE!" */
+@@ -2503,7 +2602,7 @@ wdt_arm(void)
  {
  	uint64_t ctl = 0, since = 0;
  
@@ -84,7 +158,7 @@ index 422f9d3..b365901 100644
  		return; /* SMC is not routed anywhere useful on QEMU virt */
  	}
  	uint64_t st = smc_call(VIRT_WDT_STATUS, 0, 0, &ctl, &since);
-@@ -2515,6 +2561,25 @@ wdt_arm(void)
+@@ -2515,6 +2614,25 @@ wdt_arm(void)
  	wdt_armed = (r_pet == 0);
  }
  
@@ -110,7 +184,7 @@ index 422f9d3..b365901 100644
  /* ------------------------------------------------------------------------ */
  /* UEFI exception hook: put the fault into the log instead of on the screen  */
  
-@@ -2528,9 +2593,7 @@ exception_handler(int64_t type, uint64_t *ctx)
+@@ -2528,9 +2646,7 @@ exception_handler(int64_t type, uint64_t *ctx)
  	print("loader image base %x (elr offset %x)\n", (uint64_t)(uintptr_t)&__ImageBase,
  	    ctx[EXC_CTX_ELR] - (uint64_t)(uintptr_t)&__ImageBase);
  	flush_log();
@@ -121,8 +195,11 @@ index 422f9d3..b365901 100644
  }
  
  static void
-@@ -3014,7 +3077,7 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
+@@ -3012,9 +3128,10 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
+ 	hc_requested = 0;
+ 	block_probe_requested = 0;
  	block_enabled = 0;
++	ram_log_has_kernel = 0;
  	for (const char *c = pi.cmdline; *c; c++) {
  		if (starts_with(c, "bootcpu=") && (c == pi.cmdline || c[-1] == ' ') && c[8] >= '0' && c[8] <= '7') {
 -			kernel_mpidr = (uint64_t)(c[8] - '0') << PLAT->core_shift;
@@ -130,7 +207,7 @@ index 422f9d3..b365901 100644
  		}
  		more_cores |= (starts_with(c, "cpus=") || starts_with(c, "cpumask=")) && (c == pi.cmdline || c[-1] == ' ');
  		battery_requested |= starts_with(c, "battery=1") && (c == pi.cmdline || c[-1] == ' ') &&
-@@ -3361,13 +3424,13 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
+@@ -3361,13 +3478,13 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
  	 * this loader stays on while it watches is not the kernel's, nor any the firmware runs.
  	 */
  	uint64_t cpu_mpidr[8] = { kernel_mpidr };
@@ -146,7 +223,7 @@ index 422f9d3..b365901 100644
  				int64_t state;
  
  				if (core < 0 || core >= plat->cores || mpidr == this_mpidr) {
-@@ -3403,7 +3466,8 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
+@@ -3403,7 +3520,8 @@ run_kernel(int have_checkpoint, uint64_t checkpoint)
  		dt_prop_u64(&w, "bus-frequency", 100000000ULL);
  		dt_prop_u64(&w, "memory-frequency", 100000000ULL);
  		dt_prop_u64(&w, "peripheral-frequency", 24000000ULL);
@@ -156,7 +233,7 @@ index 422f9d3..b365901 100644
  			dt_prop_u32(&w, "small-core", 1);
  		}
  		dt_end(&w);
-@@ -4350,6 +4414,12 @@ efi_main(efi_handle image, efi_system_table *st)
+@@ -4350,6 +4468,12 @@ efi_main(efi_handle image, efi_system_table *st)
  		}
  		print("display %d x %d at %x\n", (uint64_t)SCREEN.width, (uint64_t)SCREEN.height, SCREEN.base);
  	}

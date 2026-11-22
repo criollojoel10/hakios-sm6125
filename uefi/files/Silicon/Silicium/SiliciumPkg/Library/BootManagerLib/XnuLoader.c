@@ -305,7 +305,7 @@ PstoreMarker ()
   Len = AsciiSPrint (Data, sizeof (Data),
           "====0.000000-D\nstage0 pstore marker: XNU log channel works\n");
   CopyMem (Zone + 12, Data, Len);
-  *(UINT32 *)(Zone + 8) = (UINT32)(12 + Len);
+  *(UINT32 *)(Zone + 8) = (UINT32)Len;   /* data bytes, not the 12-byte persistent_ram header */
   for (i = 0; i < RAMOOPS_RECORD; i += 64) {
     __asm__ volatile ("dc cvac, %0" :: "r" (Zone + i));
   }
