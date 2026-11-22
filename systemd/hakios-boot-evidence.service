@@ -1,0 +1,11 @@
+[Unit]
+Description=HakiOS boot evidence: mark the current slot and record logdump
+After=local-fs.target
+ConditionPathExists=/usr/local/bin/collect-boot-evidence.sh
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/collect-boot-evidence.sh
+
+[Install]
+WantedBy=multi-user.target

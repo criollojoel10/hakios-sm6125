@@ -131,3 +131,25 @@ echo 11200000.usb | sudo tee /sys/bus/platform/drivers/xhci-mtk/bind
 
 `fastboot` stays at **30.0.5** (`/usr/local/bin/fastboot`); `set_active` and
 `reboot` both answered in milliseconds.
+
+### Software route to fastboot (confirmed on laurel)
+
+`sudo reboot bootloader` from Linux **does** enter ABL fastboot. The mainline kernel
+exposes `/sys/class/reboot-mode/qcom-pon` with `reboot_modes: bootloader recovery`,
+and the PON driver maps the restart string; the BCB helper (writing
+`bootonce-bootloader` to the LUN 0 `misc`) was ignored by this ABL. Use
+`reboot bootloader`; keep Volume Down + Power as the hardware fallback.
+
+### Reading XNU's log without UFSDxe
+
+`logdump` stays empty because the loader writes it through UEFI's `BlockIo` for the
+`logdump` GPT partition, and that needs `UFSDxe` (removed for the first boot). The
+loader also has a USB fastboot channel, which needs no storage:
+
+- payload built with the `usb` entry (`tools/build-image.sh --usb`);
+- kernel boot-arg `loader_return_after=N` (the kernel hands control back after N
+  seconds even if it is only waiting);
+- host: `fastboot oem run`, then `fastboot getvar result` and
+  `fastboot get_staged log.txt` for the combined loader+kernel log;
+- `fastboot oem screenshot` stages the raw framebuffer (`getvar screen` gives the
+  geometry).

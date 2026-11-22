@@ -10,20 +10,21 @@
 # goes and check it first.
 #
 #   tools/build-image.sh -f path/SILICIUM_UEFI.fd -s path/BootShim.bin -k kernel -l loader.efi \
-#                        [--cmdline "-v"] [-o boot-laurel.img]
+#                        [--usb] [--cmdline "-v"] [-o boot-laurel.img]
 #
 # Env: COMMON (default ../../common), FD_BASE/FD_SIZE from prebuilt/fd.conf.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 COMMON=${COMMON:-../../common}
 OUT=boot-laurel.img
-FD="" SHIM="" KERNEL="" LOADER="" CMDLINE="-v"
+FD="" SHIM="" KERNEL="" LOADER="" CMDLINE="-v" USB=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-f) FD=$2; shift 2 ;;
 		-s) SHIM=$2; shift 2 ;;
 		-k) KERNEL=$2; shift 2 ;;
 		-l) LOADER=$2; shift 2 ;;
+		--usb) USB=--usb; shift 1 ;;
 		--cmdline) CMDLINE=$2; shift 2 ;;
 		-o) OUT=$2; shift 2 ;;
 		*) echo "build-image: unknown $1" >&2; exit 2 ;;
@@ -44,7 +45,7 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 
 # 1. the XNUP payload the loader finds at 0xF0000000
 python3 "$COMMON/xnuloader/mkpayload.py" -o "$tmp/payload.bin" \
-	kernel="$KERNEL" ramdisk="$LOADER" --cmdline="$CMDLINE" >/dev/null
+	kernel="$KERNEL" ramdisk="$LOADER" --cmdline="$CMDLINE" $USB >/dev/null
 python3 - "$tmp/payload.bin" <<'PY'
 import sys
 d=open(sys.argv[1],'rb').read()
