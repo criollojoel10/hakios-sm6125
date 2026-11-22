@@ -283,12 +283,42 @@ StartPayloadLoader ()
   Print (L"stage0: no loader.efi entry\n");
 }
 
+// Validation of the pstore/ramoops handoff: one dmesg record in the first
+// ramoops zone (laurel: 0xffc40000, 4 KiB records, ecc 0). Linux exposes it
+// as /sys/fs/pstore/dmesg-ramoops-0 after the reset.
+#define RAMOOPS_PA      0xFFC40000ULL
+#define RAMOOPS_RECORD  4096
+#define RAMOOPS_SIG     0x43474244U
+
+STATIC
+VOID
+PstoreMarker ()
+{
+  UINT8  *Zone = (UINT8 *)(UINTN)RAMOOPS_PA;
+  CHAR8   Data[4000];
+  UINTN   Len;
+  UINTN   i;
+
+  ZeroMem (Zone, RAMOOPS_RECORD);
+  *(UINT32 *)(Zone + 0) = RAMOOPS_SIG;
+  *(UINT32 *)(Zone + 4) = 0;
+  Len = AsciiSPrint (Data, sizeof (Data),
+          "====0.000000-D\nstage0 pstore marker: XNU log channel works\n");
+  CopyMem (Zone + 12, Data, Len);
+  *(UINT32 *)(Zone + 8) = (UINT32)(12 + Len);
+  for (i = 0; i < RAMOOPS_RECORD; i += 64) {
+    __asm__ volatile ("dc cvac, %0" :: "r" (Zone + i));
+  }
+  __asm__ volatile ("dsb sy" ::: "memory");
+}
+
 VOID
 XnuLoaderMain ()
 {
   EFI_TIME Time;
 
   Print (L"stage0: XnuLoaderMain\n");
+  PstoreMarker ();
 
   // Normally does not return
   StartPayloadLoader ();
