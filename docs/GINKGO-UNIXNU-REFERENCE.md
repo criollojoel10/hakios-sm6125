@@ -136,6 +136,29 @@ the protocol they call. `SecurityStubDxe` now follows `RuntimeDxe`, and
 deviation from ginkgo's order: ginkgo boots from eMMC and does not exercise its
 UFSDxe, so its late `SecurityStubDxe` is not evidence for a UFS phone.
 
+**The BDS depex trap (2026-11-22):** the next panel message was
+`BDS Arch Protocol not present`, and `logdump` was still zero. Reading every
+`.depex` in `Device-Binaries/laurel_sprout` shows:
+
+| Driver | Depends on |
+|---|---|
+| `HALIOMMUDxe` | BDS Arch Protocol |
+| `UsbfnDwc3Dxe` | BDS Arch Protocol |
+| `GpiDxe` | BDS Arch Protocol |
+| `UFSDxe` | SMEM + `FA5F306B` (PMIC/SPMI) |
+| `PmicDxeLa` | `AE37B942` + `FA5F306B` |
+| `SPMIDxe` | `TRUE` |
+
+HakiOS's BDS starts the loader from `PlatformBootManagerUnableToBoot`, so the
+DXE dispatcher never runs the three BDS-deferred drivers. That is why
+`UsbfnDwc3Dxe` never gives the loader its USB device protocol and why
+`HALIOMMU` never sets up the UFS path. The workflow now replaces those three
+`.depex` files with `END` (`TRUE`) before the build (commit `73c2102`), and the
+platform's `BootManager.c` connects every `BlockIo` handle before
+`XnuLoaderMain()` so `PartitionDxe` creates the GPT partition handles (the
+`m20lte` port does the same). `UFSDxe`'s own depex is left alone: `SmemDxe` and
+`SPMIDxe`/`PmicDxe` are before it in the reordered APRIORI.
+
 ### 4. Kernel config and boot arguments
 
 Ginkgo's board config is a useful checklist:
