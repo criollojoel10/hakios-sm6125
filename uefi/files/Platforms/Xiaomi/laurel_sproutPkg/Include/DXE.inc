@@ -48,8 +48,8 @@
   INF Binaries/laurel_sprout/QcomPkg/Drivers/I2CDxe/I2CDxe.inf
   INF Binaries/laurel_sprout/QcomPkg/Drivers/SPMIDxe/SPMIDxe.inf
   INF Binaries/laurel_sprout/QcomPkg/Drivers/SdccDxe/SdccDxe.inf
-  # noufs (2026-11-21): DXE dispatch stopped here; the payload arrives in RAM, UFS is not needed
-  #  INF Binaries/laurel_sprout/QcomPkg/Drivers/UFSDxe/UFSDxe.inf  # noufs: the vendor UFS driver is what DXE stopped at
+  # UFS stays in: the loader writes its log to the logdump partition through UEFI BlockIo.
+  INF Binaries/laurel_sprout/QcomPkg/Drivers/UFSDxe/UFSDxe.inf
   INF Binaries/laurel_sprout/QcomPkg/Drivers/TLMMDxe/TLMMDxe.inf
 
 !if $(USE_CUSTOM_DISPLAY_DRIVER) == 1
