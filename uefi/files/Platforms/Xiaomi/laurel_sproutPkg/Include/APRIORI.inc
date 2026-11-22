@@ -7,6 +7,10 @@ APRIORI DXE {
   INF MdeModulePkg/Universal/ReportStatusCodeRouter/RuntimeDxe/ReportStatusCodeRouterRuntimeDxe.inf
   INF MdeModulePkg/Universal/StatusCodeHandler/RuntimeDxe/StatusCodeHandlerRuntimeDxe.inf
   INF MdeModulePkg/Core/RuntimeDxe/RuntimeDxe.inf
+  # The Security Arch Protocol must exist before the vendor storage drivers
+  # (SdccDxe/UFSDxe) are dispatched; the stock FDF lists it first, the APRIORI
+  # used to list it last and UFSDxe reported "Security Arch Protocol not present".
+  INF MdeModulePkg/Universal/SecurityStubDxe/SecurityStubDxe.inf
   INF ArmPkg/Drivers/CpuDxe/CpuDxe.inf
   INF ArmPkg/Drivers/ArmGicDxe/ArmGicDxe.inf
   INF EmbeddedPkg/MetronomeDxe/MetronomeDxe.inf
@@ -24,6 +28,7 @@ APRIORI DXE {
   INF Binaries/laurel_sprout/QcomPkg/Drivers/ClockDxe/ClockDxe.inf
   INF Binaries/laurel_sprout/QcomPkg/Drivers/ShmBridgeDxe/ShmBridgeDxeLA.inf
   INF Binaries/laurel_sprout/QcomPkg/Drivers/TzDxe/ScmDxeLA.inf
+  INF Binaries/laurel_sprout/QcomPkg/Drivers/TzDxe/TzDxeLA.inf
 
   INF MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
   INF MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
@@ -34,8 +39,6 @@ APRIORI DXE {
   INF Binaries/laurel_sprout/QcomPkg/Drivers/UFSDxe/UFSDxe.inf
 
   INF FatPkg/EnhancedFatDxe/Fat.inf
-
-  INF Binaries/laurel_sprout/QcomPkg/Drivers/TzDxe/TzDxeLA.inf
 
   INF MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf
 
@@ -48,7 +51,6 @@ APRIORI DXE {
   INF Binaries/laurel_sprout/QcomPkg/Drivers/PILDxe/PILDxe.inf
 
   INF MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
-  INF MdeModulePkg/Universal/SecurityStubDxe/SecurityStubDxe.inf
   INF EmbeddedPkg/EmbeddedMonotonicCounter/EmbeddedMonotonicCounter.inf
   INF EmbeddedPkg/RealTimeClockRuntimeDxe/RealTimeClockRuntimeDxe.inf
   INF MdeModulePkg/Universal/PrintDxe/PrintDxe.inf
