@@ -98,3 +98,49 @@ Never flash `gpt_both0.bin` (LUN 0 / userdata) for this.
 - begonia: fastboot **30.0.5** (compiled from nmeum/android-tools) for the ABL.
 - laurel: `android-tools` (latest) + `adb`, installed as host tooling; use
   aria2c as pacman `XferCommand`.
+
+## 2026-11-22: automatic fallback to Linux works
+
+The missing piece was the loader platform. `wdt_arm()` used to arm the Qualcomm
+virtual watchdog only on `platform_redwood`; on laurel the loader stayed on
+`platform_qemu_virt`, so every reboot was a clean cold reset and ABL retried the
+same slot forever. `patches/loader-laurel-fallback.patch` (applied by the
+`build-laurel` workflow) adds `platform_laurel` (GIC `0x0f200000/0x0f300000`,
+19.2 MHz timer, PSCI over SMC), selects it by MIDR (Cortex-A53/A73), and makes
+`reboot()`/the exception path arm a 2 s watchdog and stop petting it.
+
+Evidence on the phone:
+
+- No-kernel loader image: after the retries ABL marked slot a **Bootable 0**
+  and booted Linux b.
+- XNU image `boot-laurel-xnu-fallback.img` (7 733 248 B,
+  `9df5f6d550d16d8b7f6204cdf2e18f8150ef42da6b314bfb7d681aafda73520f`):
+  FD `ufs9` (`4f04802c…`), kernel 15 791 328 B, patched loader `cc6db985…`,
+  cmdline `-v hv_wdt_pet=1 loader_return_after=60`.
+- `fastboot set_active a` cleared the old unbootable flag and left
+  `slot-unbootable:a: no`, `slot-retry-count:a: 7`; boot a; XNU ran; after the
+  run the loader watchdog reset the phone.
+- The phone came back **on its own** to Linux. `qbootctl` then:
+
+```
+Current slot: _b
+SLOT _a:
+        Active      : 0
+        Successful  : 0
+        Bootable    : 0
+SLOT _b:
+        Active      : 1
+        Successful  : 1
+        Bootable    : 1
+```
+
+`/var/lib/hakios/last-boot.txt` at 04:19 records the same state; the
+`hakios-boot-evidence` unit marked b successful.
+
+`logdump` is still all zero: UFSDxe/BlockIo is not available (UFSDxe hangs;
+with it disabled the loader sees 0 BlockIo handles). The kernel log is printed
+on the panel by the loader after `loader_return_after`; physical log
+persistence still needs the native UFS write or the kernel UFS driver.
+
+To test XNU again after a fallback, `fastboot set_active a` (it clears
+`Bootable 0` and resets the retry count). Without that, ABL keeps booting b.

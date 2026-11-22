@@ -153,3 +153,23 @@ loader also has a USB fastboot channel, which needs no storage:
   `fastboot get_staged log.txt` for the combined loader+kernel log;
 - `fastboot oem screenshot` stages the raw framebuffer (`getvar screen` gives the
   geometry).
+
+## 2026-11-22 — automatic fallback: loader platform + watchdog
+
+The local Nov 17 session on cachyos had already found that the loader's
+`PAYLOAD_BASE`/UEFI differed and that UFSDxe hangs; its latest payloads
+`hello-xnu.bin` (XNUP: loader 66 048, kernel 15 760 208, hello ramdisk 16 528)
+and `usb-resident.bin` (custom loader 66 144) were never tested, and USB did
+not enumerate. The real advance in that tree was the **higha memory map**
+(High Bank A `0x80000000–0xc0000000` as SYS_MEM, XNUP window at
+`0x70000000`), which is now in the platform.
+
+The loader patch `patches/loader-laurel-fallback.patch` adds
+`platform_laurel`, selects it by MIDR, and arms the Qualcomm virtual watchdog
+on reboot/exception. CI `build-laurel` applies it (artifact loader
+`cc6db985…`). A no-kernel test and the XNU image
+`boot-laurel-xnu-fallback.img` (`9df5f6d5…`, cmdline
+`-v hv_wdt_pet=1 loader_return_after=60`) both returned to Linux by
+themselves; `qbootctl` left slot a **Bootable 0** and slot b active/successful.
+That is the automatic fallback the port needed. `logdump` remains zero until
+UFS BlockIo works; the kernel log is only on the panel for now.
