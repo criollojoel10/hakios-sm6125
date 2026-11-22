@@ -53,7 +53,7 @@ jobs:
           git apply --whitespace=nowarn "$GITHUB_WORKSPACE/device/patches/loader-laurel-fallback.patch"
           grep -n 'platform_laurel' xnuloader/loader.c | head
 
-      - name: SM6125 es ARMv8.0-A: sin PAN
+      - name: SM6125 es ARMv8.0-A sin PAN
         working-directory: common
         run: |
           # ginkgo/laurel are Cortex-A53/A73 (no PSTATE.PAN). HakiOS's BCM2837
