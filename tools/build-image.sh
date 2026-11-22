@@ -3,27 +3,34 @@
 #
 #   SILICIUM_UEFI.fd   the UEFI firmware (artifact "laurel-uefi" of the uefi workflow)
 #   BootShim.bin       the stub that installs the FD and copies the payload (same artifact, or built here)
-#   payload.bin        kernel + loader + boot arguments, an XNUP container (common/xnuloader/mkpayload.py)
+#   payload.bin        loader + kernel + ramdisk + boot arguments, an XNUP container
+#                      (common/xnuloader/mkpayload.py)
 #
 # The result is the layout this phone's ABL accepts for `boot_a` (header v0, page 4096, DTB appended to
 # the gzipped kernel), the one the Kupfer image on slot b uses. Nothing is flashed: say where the image
 # goes and check it first.
 #
 #   tools/build-image.sh -f path/SILICIUM_UEFI.fd -s path/BootShim.bin -k kernel -l loader.efi \
-#                        [--usb] [--cmdline "-v"] [-o boot-laurel.img]
+#                        [-r ramdisk] [--usb] [--cmdline "-v"] [-o boot-laurel.img]
+#
+# -r is the XNU ramdisk (md0). Without it the loader image goes there, which is
+# enough to reach the kernel and its timer but not userland: the kernel's mockfs
+# presents the ramdisk as /sbin/launchd, so give it a Mach-O such as
+# userland/hello (16 528 B) to run a first process.
 #
 # Env: COMMON (default ../../common), FD_BASE/FD_SIZE from prebuilt/fd.conf.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 COMMON=${COMMON:-../../common}
 OUT=boot-laurel.img
-FD="" SHIM="" KERNEL="" LOADER="" CMDLINE="-v" USB=""
+FD="" SHIM="" KERNEL="" LOADER="" RAMDISK="" CMDLINE="-v" USB=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-f) FD=$2; shift 2 ;;
 		-s) SHIM=$2; shift 2 ;;
 		-k) KERNEL=$2; shift 2 ;;
 		-l) LOADER=$2; shift 2 ;;
+		-r) RAMDISK=$2; shift 2 ;;
 		--usb) USB=--usb; shift 1 ;;
 		--cmdline) CMDLINE=$2; shift 2 ;;
 		-o) OUT=$2; shift 2 ;;
@@ -36,6 +43,8 @@ die() { echo "build-image: $*" >&2; exit 1; }
 [ -f "$SHIM" ] || die "no BootShim.bin (-s)"
 [ -f "$KERNEL" ] || die "no kernel (-k)"
 [ -f "$LOADER" ] || die "no loader (-l)"
+[ -z "$RAMDISK" ] || [ -f "$RAMDISK" ] || die "no ramdisk (-r)"
+RAMDISK=${RAMDISK:-$LOADER}
 [ -f "$COMMON/xnuloader/mkpayload.py" ] || die "no $COMMON/xnuloader/mkpayload.py (set COMMON=)"
 BASE=$(sed -n 's/^base=//p' prebuilt/fd.conf)
 SIZE=$(sed -n 's/^size=//p' prebuilt/fd.conf)
@@ -43,9 +52,11 @@ SIZE=$(sed -n 's/^size=//p' prebuilt/fd.conf)
 
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 
-# 1. the XNUP payload the loader finds at 0xF0000000
+# 1. the XNUP payload the loader finds at 0xF0000000. The "loader.efi" entry is
+# what the UEFI stage 0 (BootManagerLib/XnuLoader.c) starts: without it the FD
+# only logs diagnostics and resets, and no XNU kernel ever runs.
 python3 "$COMMON/xnuloader/mkpayload.py" -o "$tmp/payload.bin" \
-	kernel="$KERNEL" ramdisk="$LOADER" --cmdline="$CMDLINE" $USB >/dev/null
+	loader.efi="$LOADER" kernel="$KERNEL" ramdisk="$RAMDISK" --cmdline="$CMDLINE" $USB >/dev/null
 python3 - "$tmp/payload.bin" <<'PY'
 import sys
 d=open(sys.argv[1],'rb').read()
