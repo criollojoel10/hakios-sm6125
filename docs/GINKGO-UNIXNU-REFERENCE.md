@@ -127,6 +127,15 @@ even though its own storage is eMMC, which says the driver is expected to
 dispatch on SM6125. Re-enable it, boot with `loader_return_after=60`, and read
 `logdump` from Linux (`tools/fetch-logdump.sh`).
 
+**First UFSDxe attempt (2026-11-22):** the panel said
+`Security Arch Protocol not present` and `logdump` stayed all zero. laurel's
+`APRIORI.inc` listed `SecurityStubDxe` **after** `SdccDxe`/`UFSDxe` (the FDF's
+`DXE.inc` lists it first), so the vendor storage drivers were dispatched without
+the protocol they call. `SecurityStubDxe` now follows `RuntimeDxe`, and
+`TzDxeLA` sits next to `ScmDxeLA` (commit `150ac2e`). This is a laurel-specific
+deviation from ginkgo's order: ginkgo boots from eMMC and does not exercise its
+UFSDxe, so its late `SecurityStubDxe` is not evidence for a UFS phone.
+
 ### 4. Kernel config and boot arguments
 
 Ginkgo's board config is a useful checklist:
