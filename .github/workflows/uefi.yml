@@ -98,11 +98,11 @@ jobs:
       - name: Quitar el DEPEX de BDS a los drivers que el loader necesita antes
         if: always()
         run: |
-          # HALIOMMUDxe, UsbfnDwc3Dxe and GpiDxe declare a dependency on the BDS Arch
-          # Protocol. The HakiOS BDS starts the XNU loader from PlatformBootManagerUnableToBoot,
-          # so the DXE dispatcher never gets to them; the panel says "BDS Arch Protocol not
-          # present" and UFS (needs HALIOMMU) and the loader's USB never work.
-          for d in HALIOMMUDxe UsbfnDwc3Dxe GpiDxe; do
+          # HALIOMMUDxe, UsbfnDwc3Dxe, GpiDxe and UFSDxe declare dependencies the
+          # HakiOS BDS never satisfies (BDS Arch, SMEM/FA5F ordering). The BDS starts
+          # the XNU loader from PlatformBootManagerUnableToBoot, so the DXE dispatcher
+          # never reaches them; UFS BlockIo and the loader's USB never appear.
+          for d in HALIOMMUDxe UsbfnDwc3Dxe GpiDxe UFSDxe; do
             f="$MU/Binaries/laurel_sprout/QcomPkg/Drivers/$d/$d.depex"
             if [ -f "$f" ]; then
               chmod u+w "$f"
