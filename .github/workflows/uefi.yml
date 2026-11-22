@@ -95,6 +95,24 @@ jobs:
           find "$MU/Platforms/Xiaomi/laurel_sproutPkg" -type f -exec touch {} +
           echo "platform rebuild forced"
 
+      - name: Quitar el DEPEX de BDS a los drivers que el loader necesita antes
+        if: always()
+        run: |
+          # HALIOMMUDxe, UsbfnDwc3Dxe and GpiDxe declare a dependency on the BDS Arch
+          # Protocol. The HakiOS BDS starts the XNU loader from PlatformBootManagerUnableToBoot,
+          # so the DXE dispatcher never gets to them; the panel says "BDS Arch Protocol not
+          # present" and UFS (needs HALIOMMU) and the loader's USB never work.
+          for d in HALIOMMUDxe UsbfnDwc3Dxe GpiDxe; do
+            f="$MU/Binaries/laurel_sprout/QcomPkg/Drivers/$d/$d.depex"
+            if [ -f "$f" ]; then
+              chmod u+w "$f"
+              printf '\x08' > "$f"   # END = TRUE
+              echo "depex TRUE: $d"
+            else
+              echo "no depex: $f"
+            fi
+          done
+
       - name: Entorno Python de edk2
         working-directory: common/Mu-Silicium
         run: |
