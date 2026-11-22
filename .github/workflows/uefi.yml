@@ -70,7 +70,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: common/Mu-Silicium
-          key: mu-silicium-${{ hashFiles('common/uefi/BASE') }}-v1
+          key: mu-silicium-${{ hashFiles('common/uefi/BASE', 'device/uefi/files/**') }}-v2
 
       - name: Árbol Mu-Silicium (BASE + hakios.patch + plataforma laurel)
         if: steps.mu-cache.outputs.cache-hit != 'true'
@@ -85,6 +85,15 @@ jobs:
         run: |
           cp -r common/devices/laurel_sprout/uefi/files/. Mu-Silicium/
           ls Mu-Silicium/Platforms/Xiaomi/laurel_sproutPkg | head
+
+      - name: Forzar recompilación de la plataforma
+        if: always()
+        run: |
+          # A restored Mu-Silicium cache also restores Build/: edk2 then considers the copied
+          # platform sources up to date and silently keeps the old FD (no UFSDxe, old map).
+          rm -rf "$MU/Build/laurel_sproutPkg"
+          find "$MU/Platforms/Xiaomi/laurel_sproutPkg" -type f -exec touch {} +
+          echo "platform rebuild forced"
 
       - name: Entorno Python de edk2
         working-directory: common/Mu-Silicium
