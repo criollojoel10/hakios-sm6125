@@ -113,6 +113,21 @@ jobs:
             fi
           done
 
+      - name: UFSDxe de miatoll (SM7125, UFS) para laurel
+        if: always()
+        run: |
+          # The laurel UFSDxe hangs before installing BlockIo. miatoll is the same
+          # SM7125-family UFS and its Mu-Silicium 3.6 tree ships a patched UFSDxe.
+          SRC="$MU/Binaries/miatoll/QcomPkg/Drivers/UFSDxe"
+          DST="$MU/Binaries/laurel_sprout/QcomPkg/Drivers/UFSDxe"
+          if [ -f "$SRC/UFSDxe.patched.efi" ] && [ -f "$DST/UFSDxe.inf" ]; then
+            cp -f "$SRC/UFSDxe.patched.efi" "$DST/UFSDxe.efi"
+            printf '\x08' > "$DST/UFSDxe.depex"
+            echo "UFSDxe: miatoll patched, no depex"
+          else
+            echo "no miatoll UFSDxe.patched.efi"
+          fi
+
       - name: Entorno Python de edk2
         working-directory: common/Mu-Silicium
         run: |
