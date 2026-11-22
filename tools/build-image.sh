@@ -23,7 +23,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 COMMON=${COMMON:-../../common}
 OUT=boot-laurel.img
-FD="" SHIM="" KERNEL="" LOADER="" RAMDISK="" CMDLINE="-v" USB=""
+FD="" SHIM="" KERNEL="" LOADER="" RAMDISK="" CMDLINE="-v" USB="" NOLOADER=0
 while [ $# -gt 0 ]; do
 	case "$1" in
 		-f) FD=$2; shift 2 ;;
@@ -31,6 +31,7 @@ while [ $# -gt 0 ]; do
 		-k) KERNEL=$2; shift 2 ;;
 		-l) LOADER=$2; shift 2 ;;
 		-r) RAMDISK=$2; shift 2 ;;
+		--no-loader) NOLOADER=1; shift 1 ;;
 		--usb) USB=--usb; shift 1 ;;
 		--cmdline) CMDLINE=$2; shift 2 ;;
 		-o) OUT=$2; shift 2 ;;
@@ -55,8 +56,13 @@ tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
 # 1. the XNUP payload the loader finds at 0xF0000000. The "loader.efi" entry is
 # what the UEFI stage 0 (BootManagerLib/XnuLoader.c) starts: without it the FD
 # only logs diagnostics and resets, and no XNU kernel ever runs.
-python3 "$COMMON/xnuloader/mkpayload.py" -o "$tmp/payload.bin" \
-	loader.efi="$LOADER" kernel="$KERNEL" ramdisk="$RAMDISK" --cmdline="$CMDLINE" $USB >/dev/null
+if [ "$NOLOADER" = 1 ]; then
+	python3 "$COMMON/xnuloader/mkpayload.py" -o "$tmp/payload.bin" \
+		kernel="$KERNEL" ramdisk="$RAMDISK" --cmdline="$CMDLINE" $USB >/dev/null
+else
+	python3 "$COMMON/xnuloader/mkpayload.py" -o "$tmp/payload.bin" \
+		loader.efi="$LOADER" kernel="$KERNEL" ramdisk="$RAMDISK" --cmdline="$CMDLINE" $USB >/dev/null
+fi
 python3 - "$tmp/payload.bin" <<'PY'
 import sys
 d=open(sys.argv[1],'rb').read()

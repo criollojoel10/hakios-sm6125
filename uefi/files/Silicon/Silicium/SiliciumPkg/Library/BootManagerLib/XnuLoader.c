@@ -317,8 +317,8 @@ XnuLoaderMain ()
 {
   EFI_TIME Time;
 
-  Print (L"stage0: XnuLoaderMain\n");
   PstoreMarker ();
+  Print (L"stage0: XnuLoaderMain\n");
 
   // Normally does not return
   StartPayloadLoader ();
