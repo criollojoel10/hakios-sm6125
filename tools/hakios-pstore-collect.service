@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect the XNU pstore/ramoops log
+After=local-fs.target
+ConditionPathExistsGlob=/sys/fs/pstore/dmesg-ramoops-*
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/collect-pstore.sh
+
+[Install]
+WantedBy=multi-user.target
