@@ -286,7 +286,7 @@ StartPayloadLoader ()
 // Validation of the pstore/ramoops handoff: one dmesg record in the first
 // ramoops zone (laurel: 0xffc40000, 4 KiB records, ecc 0). Linux exposes it
 // as /sys/fs/pstore/dmesg-ramoops-0 after the reset.
-#define RAMOOPS_PA      0xFFC40000ULL
+#define RAMOOPS_PA      0xF3000000ULL
 #define RAMOOPS_RECORD  4096
 #define RAMOOPS_SIG     0x43474244U
 

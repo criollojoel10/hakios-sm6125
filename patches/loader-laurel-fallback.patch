@@ -1,5 +1,5 @@
 diff --git a/xnuloader/loader.c b/xnuloader/loader.c
-index 422f9d3..ee63b3b 100644
+index 422f9d3..2073582 100644
 --- a/xnuloader/loader.c
 +++ b/xnuloader/loader.c
 @@ -339,6 +339,20 @@ compose_logs(const char *klog, uint64_t klog_len)
@@ -13,7 +13,7 @@ index 422f9d3..ee63b3b 100644
 + * exposes each record as /sys/fs/pstore/dmesg-ramoops-N, so the XNU log is
 + * readable from Linux without UFS BlockIo or /dev/mem.
 + */
-+#define RAMOOPS_PA      0xFFC40000ULL
++#define RAMOOPS_PA      0xF3000000ULL
 +#define RAMOOPS_RECORD  4096
 +#define RAMOOPS_ZONES   96
 +#define RAMOOPS_SIG     0x43474244u
