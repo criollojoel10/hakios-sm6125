@@ -53,6 +53,17 @@ jobs:
           git apply --whitespace=nowarn "$GITHUB_WORKSPACE/device/patches/loader-laurel-fallback.patch"
           grep -n 'platform_laurel' xnuloader/loader.c | head
 
+      - name: SM6125 es ARMv8.0-A: sin PAN
+        working-directory: common
+        run: |
+          # ginkgo/laurel are Cortex-A53/A73 (no PSTATE.PAN). HakiOS's BCM2837
+          # config adds +pan and __ARM_PAN_AVAILABLE__ for the A55/A78 reference.
+          # Replace the + lines (not remove them) so the patch hunk counts stay
+          # valid for git apply.
+          sed -i 's| -Xclang -target-feature -Xclang +pan||' xnu/hakios.patch
+          sed -i 's|^+#define __ARM_PAN_AVAILABLE__.*|+/* SM6125 has no PAN (ARMv8.0-A; ginkgo: CONFIG_XNU_NATIVE_PAN=n) */|' xnu/hakios.patch
+          grep -n -E 'PAN|MACHINE_FLAGS_ARM64_BCM2837' xnu/hakios.patch | head
+
       - name: ccache
         uses: actions/cache@v4
         with:
