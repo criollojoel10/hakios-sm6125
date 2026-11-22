@@ -12,6 +12,11 @@ the boot layout this port reuses.
 
 ## Status
 
+`docs/XNU.md` is the current handoff record for the XNU side: what was built, what was
+proven on the phone, the payload-base and shim defects, and the next steps. Read it before
+touching the boot chain.
+
+
 `device.conf` is the single source of truth (docs are generated from it). Today: **nothing tested on the
 phone**. The pieces that exist outside this repository are named in `docs/PLAN.md`.
 

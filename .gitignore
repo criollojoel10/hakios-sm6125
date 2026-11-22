@@ -19,3 +19,6 @@ logs/
 
 !prebuilt/fd.conf
 !prebuilt/README.md
+# personal captures and boot evidence (not for git)
+diagnostics/
+*.jpg
