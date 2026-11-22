@@ -7,10 +7,6 @@ APRIORI DXE {
   INF MdeModulePkg/Universal/ReportStatusCodeRouter/RuntimeDxe/ReportStatusCodeRouterRuntimeDxe.inf
   INF MdeModulePkg/Universal/StatusCodeHandler/RuntimeDxe/StatusCodeHandlerRuntimeDxe.inf
   INF MdeModulePkg/Core/RuntimeDxe/RuntimeDxe.inf
-  # The Security Arch Protocol must exist before the vendor storage drivers
-  # (SdccDxe/UFSDxe) are dispatched; the stock FDF lists it first, the APRIORI
-  # used to list it last and UFSDxe reported "Security Arch Protocol not present".
-  INF MdeModulePkg/Universal/SecurityStubDxe/SecurityStubDxe.inf
   INF ArmPkg/Drivers/CpuDxe/CpuDxe.inf
   INF ArmPkg/Drivers/ArmGicDxe/ArmGicDxe.inf
   INF EmbeddedPkg/MetronomeDxe/MetronomeDxe.inf
@@ -28,17 +24,16 @@ APRIORI DXE {
   INF Binaries/laurel_sprout/QcomPkg/Drivers/ClockDxe/ClockDxe.inf
   INF Binaries/laurel_sprout/QcomPkg/Drivers/ShmBridgeDxe/ShmBridgeDxeLA.inf
   INF Binaries/laurel_sprout/QcomPkg/Drivers/TzDxe/ScmDxeLA.inf
-  INF Binaries/laurel_sprout/QcomPkg/Drivers/TzDxe/TzDxeLA.inf
 
   INF MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
   INF MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
   INF MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
 
   INF Binaries/laurel_sprout/QcomPkg/Drivers/SdccDxe/SdccDxe.inf
-  # UFS stays in: the loader writes its log to the logdump partition through UEFI BlockIo.
-  INF Binaries/laurel_sprout/QcomPkg/Drivers/UFSDxe/UFSDxe.inf
 
   INF FatPkg/EnhancedFatDxe/Fat.inf
+
+  INF Binaries/laurel_sprout/QcomPkg/Drivers/TzDxe/TzDxeLA.inf
 
   INF MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf
 
@@ -51,12 +46,17 @@ APRIORI DXE {
   INF Binaries/laurel_sprout/QcomPkg/Drivers/PILDxe/PILDxe.inf
 
   INF MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
+  INF MdeModulePkg/Universal/SecurityStubDxe/SecurityStubDxe.inf
   INF EmbeddedPkg/EmbeddedMonotonicCounter/EmbeddedMonotonicCounter.inf
   INF EmbeddedPkg/RealTimeClockRuntimeDxe/RealTimeClockRuntimeDxe.inf
   INF MdeModulePkg/Universal/PrintDxe/PrintDxe.inf
   INF MdeModulePkg/Universal/DevicePathDxe/DevicePathDxe.inf
   INF MdeModulePkg/Universal/CapsuleRuntimeDxe/CapsuleRuntimeDxe.inf
   INF MdeModulePkg/Universal/HiiDatabaseDxe/HiiDatabaseDxe.inf
+  # UFSDxe is the loader's logdump BlockIo. It needs the Security Arch Protocol
+  # (SecurityStubDxe above) and the core Runtime arch protocols, so keep it
+  # after them and before BdsDxe.
+  INF Binaries/laurel_sprout/QcomPkg/Drivers/UFSDxe/UFSDxe.inf
   INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
 
   INF Binaries/laurel_sprout/QcomPkg/Drivers/GpiDxe/GpiDxe.inf
