@@ -55,9 +55,9 @@ APRIORI DXE {
   INF MdeModulePkg/Universal/HiiDatabaseDxe/HiiDatabaseDxe.inf
   # UFSDxe is the loader's logdump BlockIo. It needs the Security Arch Protocol
   # (SecurityStubDxe above) and the core Runtime arch protocols, so keep it
-  # after them and before BdsDxe.
+  # after them. BdsDxe is moved to the end of this list: it starts the loader,
+  # so every driver the loader needs must be dispatched before it.
   INF Binaries/laurel_sprout/QcomPkg/Drivers/UFSDxe/UFSDxe.inf
-  INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
 
   INF Binaries/laurel_sprout/QcomPkg/Drivers/GpiDxe/GpiDxe.inf
   INF Binaries/laurel_sprout/QcomPkg/Drivers/I2CDxe/I2CDxe.inf
@@ -92,4 +92,9 @@ APRIORI DXE {
   INF MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf
   INF MdeModulePkg/Universal/Console/ConSplitterDxe/ConSplitterDxe.inf
   INF MdeModulePkg/Universal/Console/GraphicsConsoleDxe/GraphicsConsoleDxe.inf
+
+  # Last: BDS runs the XNU loader from PlatformBootManagerUnableToBoot, so the
+  # UFS, USB device, partition, display and console drivers above must already
+  # be dispatched when it does.
+  INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
 }
