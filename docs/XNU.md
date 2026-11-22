@@ -214,3 +214,52 @@ The logdump path therefore remains: the kernel's own UFS driver
 (`hakios.ufs.c`, a `darwin`-style partition) or a native UFS write in the
 loader. ginkgo cannot help with this directly: ginkgo is eMMC and does not
 exercise UFSDxe.
+
+## 13. How other XNU ports capture logs (survey, 2026-11-22)
+
+The closest project is **UniXNU** (the boot environment ginkgo uses). Its
+`docs/porting/log-capture.md` separates four stages and is explicit that a
+photograph is only the fallback:
+
+| Stage | Mechanism |
+|---|---|
+| Firmware | `AdvancedLogDxe` reads the platform's Advanced Logger buffer and rotates it as QR frames (`Tools -> Advanced Logger`); the host scans it with OneSend. |
+| Kernel handoff | UART, or the framebuffer. `scripts/xnu-panic-screen.c` draws the panic and its registers and keeps the text in `boot_progress_panic_text` (2 KiB). |
+| Persistent | A reserved region on storage, written by the kernel (`package/BootLog.c`), read back by a Linux reader or a recovery image. |
+| Unattended | A timed return to bootloader/recovery, one evidence directory per boot. |
+
+`UniXNU-sheng` is the reference persistent implementation:
+
+- `BootLog.c` writes to the last 32 MiB of userdata through `NativeUfs`, in
+  4096-byte blocks: block 0 is a header, blocks 1..32 the kernel message
+  buffer, then text slots of 16 blocks in a ring, then the export area. The
+  header (version 5, boot id, first LBA, window/msg/slot geometry, counters)
+  is written last, so a reader never trusts a half-written round.
+- `package/linux-log/` is a tiny Linux with the UFS driver and USB CDC ACM; the
+  host runs `scripts/read-sheng-log.py` over the serial shell, or uses
+  recovery + `adb pull` of the raw window. `--decode log.bin` decodes a saved
+  copy; `--prev` decodes `sysctl -b kern.unixnu_prev_log` (the previous run's
+  bounded copy).
+- The writer is inside XNU and uses its own UFS driver, so it does not need
+  firmware BlockIo. This is exactly the piece laurel lacks today.
+
+Apple's own XNU has the **embedded panic log**: `pexpert/arm/pe_init.c` maps
+the region named by `/pram` (`reg`) and `chosen/embedded-panic-log-size`; the
+next stage can read it. `patches/xnu/native-dt-panic-region.patch` is UniXNU's
+hardening of that path. HakiOS's loader already publishes `/pram` and sets
+`embedded-panic-log-size` (0x80000 at the tail of the payload reservation), so
+a future reader can use the same region.
+
+HakiOS's own loader has a USB fastboot channel (`fastboot get_staged log.txt`,
+`oem screenshot`), but on laurel `UsbfnDwc3Dxe` does not enumerate, so it is
+not usable yet.
+
+For laurel the shortest path is **pstore/ramoops**, which Linux already
+reserves at `0xffc40000` (768 KiB: 96 x 4 KiB dmesg records, 256 KiB console,
+128 KiB pmsg, ECC 0) and exposes under `/sys/fs/pstore`. The loader runs before
+the reset, so it can write the same `persistent_ram_buffer` records the kernel
+writes on a panic; the next Linux boot reads them. This avoids both the XNU UFS
+driver and `/dev/mem` (`CONFIG_STRICT_DEVMEM=y` blocks RAM there), and is much
+smaller than porting `BootLog.c`. The record layout used is: 12-byte header
+(`0x43474244`, start 0, size = data bytes), then `====0.000000-D\n` and the
+text; the size field does **not** include the 12 bytes.
