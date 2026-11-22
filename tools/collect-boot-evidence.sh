@@ -26,7 +26,13 @@ slot=$(tr ' ' '\n' </proc/cmdline | sed -n 's/^androidboot.slot_suffix=//p')
 	echo
 	echo "-- logdump (loader's own log, if any) --"
 	if [ -b /dev/disk/by-partlabel/logdump ]; then
-		strings -n 6 /dev/disk/by-partlabel/logdump | tail -200
+		# keep the raw bytes too: `strings | tail` loses the start of a long log
+		dd if=/dev/disk/by-partlabel/logdump of=/var/lib/hakios/logdump-last.bin \
+			bs=1M count=2 status=none
+		strings -n 4 /var/lib/hakios/logdump-last.bin
+		if [ -s /var/lib/hakios/logdump-last.bin ]; then
+			strings -n 4 /var/lib/hakios/logdump-last.bin > /var/lib/hakios/logdump-last.txt
+		fi
 	else
 		echo "no logdump partition"
 	fi
