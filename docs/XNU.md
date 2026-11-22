@@ -185,3 +185,16 @@ produce a line of output that survives the fallback".
   is a **persisted** kernel log, not the loader screen. The local
   0x70000000 payload-base experiment remains for the local tree; the CI HakiOS
   shim at 0xF0000000 reaches the kernel timer.
+
+## 11. UFSDxe attempts for the logdump path
+
+- **laurel vendor UFSDxe, depex `TRUE`** (FD `ufs9`): the loader and the XNU
+  kernel timer are reached and the fallback works, but `BlockIO` still has 0
+  handles and `logdump` stays zero. The vendor driver itself does not install
+  the partition protocol on this port.
+- **miatoll `UFSDxe.patched.efi`** (SM7125, Mu-Silicium 3.6, same UFS family):
+  copied over the laurel binary with depex `TRUE`, the phone hangs on the
+  Android boot logo before UEFI. Discarded; the workflow no longer uses it.
+- The remaining paths for a physical log are the kernel's own UFS driver
+  (`hakios.ufs.c`, a `darwin`-style partition) or a native UFS write in the
+  loader; both are code changes, not a drop-in binary.
