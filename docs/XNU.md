@@ -1,6 +1,6 @@
 # XNU on laurel_sprout: state of the port
 
-Last updated: 2026-11-21. This file is the handoff record: what was built, what was
+Last updated: 2026-11-21 (snapshot; see section 9 for later commits). This file is the handoff record: what was built, what was
 proven on the phone, what failed, and the next steps. `docs/PLAN.md` holds the older
 plan and research notes; where the two disagree, this file is newer.
 
@@ -139,3 +139,26 @@ Firmware, `diagnostics/`, photos, serial numbers and any capture that identifies
 stay out of git. `diagnostics/` holds the Android-side captures used for the ramoops
 analysis (`dmesg.txt`, `logcat.txt`, `pstore-status.txt`, `console-ramoops-control.txt`,
 `logdump.bin`); it is ignored by git.
+
+
+## 9. Newer than this file
+
+`docs/JOURNAL.md` and `docs/DUAL-BOOT-TEST.md` carry work that landed after this
+snapshot; read them first. In short:
+
+- `loader: add platform_laurel (GIC/timer/SMC) and watchdog fallback` (`51b938f`) adds
+  `patches/loader-laurel-fallback.patch`: `platform_laurel`, selected by MIDR, arms the
+  Qualcomm virtual watchdog on reboot and exception.
+- `58f964c` records the result: a no-kernel test and `boot-laurel-xnu-fallback.img`
+  (cmdline `-v hv_wdt_pet=1 loader_return_after=60`) both returned to Linux by
+  themselves, which is the automatic fallback this port needed. The kernel log is still
+  panel-only; `logdump` stays untouched until UFS BlockIO works.
+- The higha memory map (High Bank A as SYS_MEM, XNUP window at `0x70000000`) is now part
+  of the platform, which supersedes the "reserve it" step in section 7.
+- `ca2d623` builds laurel without PAN: SM6125 is ARMv8.0-A.
+- `docs/DUAL-BOOT-TEST.md` states the rule that came out of the 2026-11-21 incident:
+  switch slots with the ABL (`fastboot set_active`), never with `qbootctl`, because a
+  partial qbootctl write can leave both slots unbootable.
+
+So the current gate is no longer "does the payload base match" but "does the XNU kernel
+produce a line of output that survives the fallback".
