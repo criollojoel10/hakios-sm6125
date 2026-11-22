@@ -198,3 +198,19 @@ produce a line of output that survives the fallback".
 - The remaining paths for a physical log are the kernel's own UFS driver
   (`hakios.ufs.c`, a `darwin`-style partition) or a native UFS write in the
   loader; both are code changes, not a drop-in binary.
+
+## 12. miatoll UFSDxe result: no BlockIo, no logdump
+
+The miatoll `UFSDxe.patched.efi` image (`boot-laurel-xnu-log-miatoll.img`,
+7 270 400 B) was flashed to boot_a with the no-PAN kernel and the patched
+loader. The phone showed the Android boot logo, then returned to Linux by
+itself after 288 s. `qbootctl` afterwards: slot a Active 0, Successful 0,
+**Bootable 1** (the `set_active b` recovery re-enabled it), b Active 1,
+Successful 1, Bootable 1. `/var/lib/hakios/logdump-last.txt` is **0 bytes**;
+the raw 2 MiB copy is all zero. So the miatoll UFSDxe does not install the
+partition BlockIo either; the workflow step was removed (commit `2d66d9e`).
+
+The logdump path therefore remains: the kernel's own UFS driver
+(`hakios.ufs.c`, a `darwin`-style partition) or a native UFS write in the
+loader. ginkgo cannot help with this directly: ginkgo is eMMC and does not
+exercise UFSDxe.
